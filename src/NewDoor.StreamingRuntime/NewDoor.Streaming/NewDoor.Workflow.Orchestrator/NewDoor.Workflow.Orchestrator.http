@@ -1,0 +1,6 @@
+@NewDoor.Workflow.Orchestrator_HostAddress = http://localhost:5064
+
+GET {{NewDoor.Workflow.Orchestrator_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
