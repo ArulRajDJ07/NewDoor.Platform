@@ -1,4 +1,0 @@
-<Solution>
-  <Project Path="../NewDoor.API/NewDoor.API.csproj" />
-  <Project Path="NewDoor.Web.csproj" />
-</Solution>
