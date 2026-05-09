@@ -1,0 +1,5 @@
+<Solution>
+  <Project Path="NewDoor.EventBus/NewDoor.EventBus.csproj" />
+  <Project Path="NewDoor.Listener/NewDoor.Listener.csproj" />
+  <Project Path="NewDoor.Workflow.Orchestrator/NewDoor.Workflow.Orchestrator.csproj" />
+</Solution>
