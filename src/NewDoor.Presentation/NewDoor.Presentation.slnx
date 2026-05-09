@@ -1,4 +1,6 @@
 <Solution>
   <Project Path="NewDoor.API/NewDoor.API.csproj" />
+  <Project Path="NewDoor.DeviceSimulator/NewDoor.DeviceSimulator.csproj" Id="1db0a288-4551-4b0e-9f72-2eb796f99805" />
+  <Project Path="NewDoor.Gateway.Api/NewDoor.Gateway.Api.csproj" Id="69b3da05-602f-4866-851d-a9ea77345004" />
   <Project Path="NewDoor.Web/NewDoor.Web.csproj" />
 </Solution>
