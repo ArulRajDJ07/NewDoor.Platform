@@ -1,0 +1,6 @@
+@NewDoor.Listener_HostAddress = http://localhost:5064
+
+GET {{NewDoor.Listener_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

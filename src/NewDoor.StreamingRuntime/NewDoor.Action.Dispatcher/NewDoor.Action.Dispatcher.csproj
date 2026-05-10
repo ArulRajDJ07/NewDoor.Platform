@@ -77,8 +77,4 @@
     </Reference>
   </ItemGroup>
 
-  <ItemGroup>
-    <ProjectReference Include="..\NewDoor.Listener\NewDoor.Listener.csproj" />
-  </ItemGroup>
-
 </Project>
