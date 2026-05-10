@@ -1,0 +1,7 @@
+using DoWhatta.Platform.Core.Settings;
+
+namespace NewDoor.Workflow.Orchestrator.Settings;
+
+public class ApplicationSettings : DoWhatta.Platform.Core.Settings.ApplicationSettings
+{
+}

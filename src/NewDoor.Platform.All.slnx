@@ -1,6 +1,6 @@
 <Solution>
   <Folder Name="/1.NewDoor.Edge/">
-    <Project Path="NewDoor.Presentation/NewDoor.Gateway.Api/NewDoor.Gateway.Api.csproj" />
+    <Project Path="NewDoor.Presentation/NewDoor.Gateway.Api/NewDoor.Gateway.Api.csproj" Id="49ab4f44-7d12-4f65-ac64-a2cd602e0698" />
   </Folder>
   <Folder Name="/2.NewDoor.Client/">
     <Project Path="NewDoor.Presentation/NewDoor.DeviceSimulator/NewDoor.DeviceSimulator.csproj" />
