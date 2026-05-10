@@ -26,7 +26,7 @@
   <Folder Name="/5.NewDoor.ControlPlane/">
     <Project Path="NewDoor.Presentation/NewDoor.API/NewDoor.API.csproj" />
   </Folder>
-  <Folder Name="/6.NewDoor.SharedKernel/">
+  <Folder Name="/6.NewDoor.Core/">
     <Project Path="NewDoor.PlatformShared/NewDoor.Contracts/NewDoor.Contracts/NewDoor.Contracts.csproj" />
     <Project Path="NewDoor.PlatformShared/NewDoor.Domain/NewDoor.Domain.csproj" />
   </Folder>
