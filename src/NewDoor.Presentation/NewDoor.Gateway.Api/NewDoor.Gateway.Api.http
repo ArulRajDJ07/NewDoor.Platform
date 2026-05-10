@@ -1,0 +1,6 @@
+@NewDoor.Gateway.Api_HostAddress = http://localhost:5064
+
+GET {{NewDoor.Gateway.Api_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

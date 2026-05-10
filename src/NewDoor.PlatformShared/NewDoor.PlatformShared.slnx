@@ -1,0 +1,7 @@
+<Solution>
+  <Project Path="NewDoor.Cache/NewDoor.Cache.csproj" Id="87f5b8bb-d03b-4550-9b89-28bf342c3fb1" />
+  <Project Path="NewDoor.Contracts/NewDoor.Contracts/NewDoor.Contracts.csproj" />
+  <Project Path="NewDoor.Domain/NewDoor.Domain.csproj" />
+  <Project Path="NewDoor.Infrastructure/NewDoor.Infrastructure.csproj" Id="2a36c6e2-72b2-4103-83a6-392f4787e652" />
+  <Project Path="NewDoor.Persistence/NewDoor.Persistence.csproj" Id="23b69597-18e4-4487-9f33-3945f3921ce7" />
+</Solution>

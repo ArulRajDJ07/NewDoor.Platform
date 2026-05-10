@@ -1,5 +1,7 @@
 <Solution>
+  <Project Path="NewDoor.Action.Dispatcher/NewDoor.Action.Dispatcher.csproj" Id="f08a9fbd-83aa-4d25-b0e8-4b5c0ac6731b" />
   <Project Path="NewDoor.EventBus/NewDoor.EventBus.csproj" />
   <Project Path="NewDoor.Listener/NewDoor.Listener.csproj" />
+  <Project Path="NewDoor.Processor.Runtime/NewDoor.Processor.Runtime.csproj" />
   <Project Path="NewDoor.Workflow.Orchestrator/NewDoor.Workflow.Orchestrator.csproj" />
 </Solution>

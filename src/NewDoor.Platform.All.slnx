@@ -1,0 +1,38 @@
+<Solution>
+  <Folder Name="/1.NewDoor.Edge/">
+    <Project Path="NewDoor.Presentation/NewDoor.Gateway.Api/NewDoor.Gateway.Api.csproj" />
+  </Folder>
+  <Folder Name="/2.NewDoor.Client/">
+    <Project Path="NewDoor.Presentation/NewDoor.DeviceSimulator/NewDoor.DeviceSimulator.csproj" />
+    <Project Path="NewDoor.Presentation/NewDoor.Web/NewDoor.Web.csproj" />
+  </Folder>
+  <Folder Name="/3. NewDoor.Runtime/">
+    <Project Path="NewDoor.StreamingRuntime/NewDoor.Action.Dispatcher/NewDoor.Action.Dispatcher.csproj" />
+    <Project Path="NewDoor.StreamingRuntime/NewDoor.Listener/NewDoor.Listener.csproj" />
+    <Project Path="NewDoor.StreamingRuntime/NewDoor.Processor.Runtime/NewDoor.Processor.Runtime.csproj" />
+    <Project Path="NewDoor.StreamingRuntime/NewDoor.Workflow.Orchestrator/NewDoor.Workflow.Orchestrator.csproj" />
+  </Folder>
+  <Folder Name="/4.NewDoor.Platform/" />
+  <Folder Name="/4.NewDoor.Platform/Data/">
+    <Project Path="NewDoor.PlatformShared/NewDoor.Cache/NewDoor.Cache.csproj" />
+    <Project Path="NewDoor.PlatformShared/NewDoor.Persistence/NewDoor.Persistence.csproj" />
+  </Folder>
+  <Folder Name="/4.NewDoor.Platform/Infrastrucuture/">
+    <Project Path="NewDoor.PlatformShared/NewDoor.Infrastructure/NewDoor.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/4.NewDoor.Platform/Messaging/">
+    <Project Path="NewDoor.StreamingRuntime/NewDoor.EventBus/NewDoor.EventBus.csproj" />
+  </Folder>
+  <Folder Name="/5.NewDoor.ControlPlane/">
+    <Project Path="NewDoor.Presentation/NewDoor.API/NewDoor.API.csproj" />
+  </Folder>
+  <Folder Name="/6.NewDoor.SharedKernel/">
+    <Project Path="NewDoor.PlatformShared/NewDoor.Contracts/NewDoor.Contracts/NewDoor.Contracts.csproj" />
+    <Project Path="NewDoor.PlatformShared/NewDoor.Domain/NewDoor.Domain.csproj" />
+  </Folder>
+  <Folder Name="/7.NewDoor.Tests/">
+    <Project Path="../tests/NewDoor.UnitTests/NewDoor.UnitTests.csproj" Id="066e9c1f-b62f-4028-b91b-67d6fd0c99ae" />
+    <Project Path="NewDoor.IntegrationTests/NewDoor.IntegrationTests.csproj" Id="4678e57a-9971-46c3-98cf-9a90af94a6cc" />
+    <Project Path="NewDoor.LoadTests/NewDoor.LoadTests.csproj" Id="3d132d2a-9075-48fe-b2b7-42253a139b92" />
+  </Folder>
+</Solution>
