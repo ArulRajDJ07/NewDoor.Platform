@@ -7,4 +7,5 @@
     public interface IBuildingRepository : IBaseRepository<Building>, IscopedService
     {
         Task<int> AddRangeAsync(ICollection<Building> buildings);
+        Task<List<(Building Building, List<Device> Devices)>> GetAllBuildingsWithDevicesAsync();
     }
