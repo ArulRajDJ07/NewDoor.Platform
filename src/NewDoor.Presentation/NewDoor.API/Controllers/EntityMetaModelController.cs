@@ -1,7 +1,4 @@
-﻿using System.Linq;
-using NewDoor.API.Features.MetaModel.Command;
-using NewDoor.API.Features.MetaModel.Query;
-using DoWhatta.Platform.Builder;
+﻿using DoWhatta.Platform.Builder;
 using DoWhatta.Platform.Builder.Output;
 using DoWhatta.Platform.DTO.Features.MetaModel;
 using DoWhatta.Platform.DTO.Features.MetaModel.Models;
@@ -10,6 +7,10 @@ using DoWhatta.Platform.Entities;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Azure.Amqp.Framing;
+using NewDoor.API.Features.MetaModel.Command;
+using NewDoor.API.Features.MetaModel.Query;
+using System.Linq;
 
 namespace NewDoor.API.Controllers
 {
@@ -18,8 +19,7 @@ namespace NewDoor.API.Controllers
     [Authorize]
     public class EntityMetaModelController(
         IMediator mediator,
-        DoWhattaCodeGenerator dowhattaCodegen,
-        CodeOutputOrchestrator outputOrchestrator,
+        EntityGenerator dowhattaCodegen,
         IWebHostEnvironment env) : ControllerBase
     {
         [HttpGet("GetAllEntityMetaModel")]
@@ -81,36 +81,41 @@ namespace NewDoor.API.Controllers
         }
 
 
+
         [HttpPost("{id}/GenerateCode")]
-        public async Task<IActionResult> GenerateCode(
-            int id,
-            [FromBody] CodeGenRequest request,
-            [FromQuery] CodeGenerationTarget target = CodeGenerationTarget.Platform,
-            [FromQuery] CodeOutputMode outputMode = CodeOutputMode.LocalOnly,
-            [FromQuery] bool compile = false,
-            [FromQuery] DatabaseProvider provider = DatabaseProvider.SqlServer)
+        public async Task<IActionResult> GenerateCode(int id, [FromBody] CodeGenRequest request, [FromQuery] bool compile = false, [FromQuery] DatabaseProvider provider = DatabaseProvider.SqlServer)
         {
-           EntityMetaModelResponse entity =
-                await mediator.Send(new FindEntityMetaModelByIdQuery(id));
+            EntityMetaModelResponse entity =
+                 await mediator.Send(new FindEntityMetaModelByIdQuery(id));
 
             string apiRootPath = env.ContentRootPath;
             string solutionRootPath = Path.GetDirectoryName(apiRootPath)!;
 
+            string featurePath = Path.Combine(
+                apiRootPath,
+                "Features",
+                request.EntityName + "s"
+            );
+
+            request.ApplicationPath = apiRootPath;
+            request.FeaturePath = featurePath;
+            request.DTOPath = Path.Combine(
+                solutionRootPath,
+                "NewDoor.Platform.DTO",
+                "Features"
+            );
+            request.EntityPath = Path.Combine(
+                solutionRootPath,
+                "NewDoor.Platform.Entities"
+            );
 
             await mediator.Send(new GeneratePageFieldsCommand(entity));
-
-            var generation = await dowhattaCodegen.CodeBuilderAsync(
-                request,
-                entity,
-                target,
-                string.Empty,
-                HttpContext.RequestAborted);
-
-            await outputOrchestrator.WriteAsync(outputMode, solutionRootPath, generation, HttpContext.RequestAborted);
+            var generatedFiles =
+                await dowhattaCodegen.CodeBuilderAsync(request, entity);
 
             if (compile)
             {
-                await mediator.Send(new CompileModelCommand(CompileMode.Schema,provider,id));
+                await mediator.Send(new CompileModelCommand(CompileMode.Schema, provider, id));
             }
 
             return Ok(new
@@ -120,11 +125,9 @@ namespace NewDoor.API.Controllers
                     : "Code generated successfully",
                 EntityId = id,
                 EntityName = request.EntityName,
-                Target = target.ToString(),
-                OutputMode = outputMode.ToString(),
                 Compiled = compile,
                 Provider = provider,
-                Files = generation.RelativePaths
+                Files = generatedFiles
             });
         }
 

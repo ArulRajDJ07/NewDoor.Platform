@@ -77,4 +77,13 @@
     </Reference>
   </ItemGroup>
 
+  <ItemGroup>
+    <Folder Include="NewDoor.Platform.DTO\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\NewDoor.PlatformShared\NewDoor.Platform.DTO\NewDoor.Platform.DTO.csproj" />
+    <ProjectReference Include="..\..\NewDoor.PlatformShared\NewDoor.Platform.Entities\NewDoor.Platform.Entities.csproj" />
+  </ItemGroup>
+
 </Project>

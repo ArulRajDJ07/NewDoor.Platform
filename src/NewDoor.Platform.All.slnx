@@ -27,8 +27,8 @@
     <Project Path="NewDoor.Presentation/NewDoor.API/NewDoor.API.csproj" />
   </Folder>
   <Folder Name="/6.NewDoor.Core/">
-    <Project Path="NewDoor.PlatformShared/NewDoor.Contracts/NewDoor.Contracts/NewDoor.Contracts.csproj" />
-    <Project Path="NewDoor.PlatformShared/NewDoor.Domain/NewDoor.Domain.csproj" />
+    <Project Path="NewDoor.PlatformShared/NewDoor.Platform.DTO/NewDoor.Platform.DTO.csproj" />
+    <Project Path="NewDoor.PlatformShared/NewDoor.Platform.Entities/NewDoor.Platform.Entities.csproj" />
   </Folder>
   <Folder Name="/7.NewDoor.Tests/">
     <Project Path="../tests/NewDoor.UnitTests/NewDoor.UnitTests.csproj" Id="066e9c1f-b62f-4028-b91b-67d6fd0c99ae" />

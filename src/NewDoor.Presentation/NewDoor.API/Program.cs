@@ -50,7 +50,7 @@ namespace NewDoor.API
             builder.Services.AddAutoMapper(typeof(MetaModelMapper));
             builder.Services.AddAutoMapper(typeof(EntityPropertyMetaModelMapper));
 
-            builder.Services.AddScoped<DoWhattaCodeGenerator>();
+            builder.Services.AddScoped<EntityGenerator>();
             builder.Services.AddScoped<CodeOutputOrchestrator>();
 
             builder.Services.AddPlatformServices(builder.Configuration);
