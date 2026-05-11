@@ -6,5 +6,5 @@
 
     public interface IIncidentRepository : IBaseRepository<Incident>, IscopedService
     {
-        // Add custom methods here if needed
+        Task<int> AddRangeAsync(ICollection<Incident> incidents);
     }

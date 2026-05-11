@@ -4,7 +4,14 @@
 
     namespace NewDoor.API.Data.Repositories;
 
-    public class DeviceRepository(DoWhattaDBContext context)
+    public class DeviceRepository(DoWhattaProductDBContext context)
         : BaseRepository<Device>(context), IDeviceRepository
     {
+        private readonly DoWhattaProductDBContext _context = context;
+
+        public async Task<int> AddRangeAsync(ICollection<Device> devices)
+        {
+            await DbSet.AddRangeAsync(devices);
+            return await _context.SaveChangesAsync();
+        }
     }

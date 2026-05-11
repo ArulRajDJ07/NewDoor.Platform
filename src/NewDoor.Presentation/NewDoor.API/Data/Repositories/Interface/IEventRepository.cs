@@ -6,5 +6,5 @@
 
     public interface IEventRepository : IBaseRepository<Event>, IscopedService
     {
-        // Add custom methods here if needed
+        Task<int> AddRangeAsync(ICollection<Event> events);
     }

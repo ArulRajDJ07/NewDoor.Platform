@@ -8,4 +8,11 @@
     public class EventsHistoryRepository(DoWhattaProductDBContext context)
         : BaseRepository<EventsHistory>(context), IEventsHistoryRepository
     {
+        private readonly DoWhattaProductDBContext _context = context;
+
+        public async Task<int> AddRangeAsync(ICollection<EventsHistory> eventsHistories)
+        {
+            await DbSet.AddRangeAsync(eventsHistories);
+            return await _context.SaveChangesAsync();
+        }
     }

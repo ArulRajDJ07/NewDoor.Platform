@@ -7,6 +7,14 @@ namespace NewDoor.API.Data.Repositories
 {
     public class UserRepository(DoWhattaDBContext applicationDbContext) : BaseRepository<UserDetail>(applicationDbContext), IUserRepository
     {
+        private readonly DoWhattaDBContext _context = applicationDbContext;
+
+        public async Task<int> AddRangeAsync(ICollection<UserDetail> users)
+        {
+            await DbSet.AddRangeAsync(users);
+            return await _context.SaveChangesAsync();
+        }
+
         public async Task<UserDetail?> GetUserDetail(string? PhoneNumber)
         {
             return await DbSet.AsNoTracking().FirstOrDefaultAsync(x => string.Equals(x.PhoneNumber, PhoneNumber));

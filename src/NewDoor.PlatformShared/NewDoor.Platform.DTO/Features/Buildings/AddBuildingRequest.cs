@@ -4,9 +4,6 @@
         public class AddBuildingRequest  
         {
     [Required]
-        public int Id { get; set; }
-
-        [Required]
         public string BuildingCode { get; set; }
 
         [Required]

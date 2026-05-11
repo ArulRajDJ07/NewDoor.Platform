@@ -6,5 +6,5 @@
 
     public interface IAlarmRepository : IBaseRepository<Alarm>, IscopedService
     {
-        // Add custom methods here if needed
+        Task<int> AddRangeAsync(ICollection<Alarm> alarms);
     }

@@ -6,5 +6,5 @@
 
     public interface IDeviceRepository : IBaseRepository<Device>, IscopedService
     {
-        // Add custom methods here if needed
+        Task<int> AddRangeAsync(ICollection<Device> devices);
     }

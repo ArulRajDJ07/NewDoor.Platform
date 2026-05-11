@@ -6,5 +6,5 @@
 
     public interface IDeviceRuntimeStatusRepository : IBaseRepository<DeviceRuntimeStatus>, IscopedService
     {
-        // Add custom methods here if needed
+        Task<int> AddRangeAsync(ICollection<DeviceRuntimeStatus> deviceRuntimeStatuses);
     }

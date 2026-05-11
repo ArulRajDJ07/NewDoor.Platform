@@ -6,5 +6,5 @@
 
     public interface IEventsHistoryRepository : IBaseRepository<EventsHistory>, IscopedService
     {
-        // Add custom methods here if needed
+        Task<int> AddRangeAsync(ICollection<EventsHistory> eventsHistories);
     }

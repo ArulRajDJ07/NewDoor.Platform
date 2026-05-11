@@ -6,5 +6,5 @@
 
     public interface IRuleConfigurationRepository : IBaseRepository<RuleConfiguration>, IscopedService
     {
-        // Add custom methods here if needed
+        Task<int> AddRangeAsync(ICollection<RuleConfiguration> ruleConfigurations);
     }

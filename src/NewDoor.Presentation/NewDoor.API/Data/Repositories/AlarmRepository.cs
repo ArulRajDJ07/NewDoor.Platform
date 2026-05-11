@@ -8,4 +8,11 @@
     public class AlarmRepository(DoWhattaProductDBContext context)
         : BaseRepository<Alarm>(context), IAlarmRepository
     {
+        private readonly DoWhattaProductDBContext _context = context;
+
+        public async Task<int> AddRangeAsync(ICollection<Alarm> alarms)
+        {
+            await DbSet.AddRangeAsync(alarms);
+            return await _context.SaveChangesAsync();
+        }
     }

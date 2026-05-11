@@ -13,7 +13,7 @@ using NewDoor.Platform.Entities;
 
         builder.HasKey(x => x.Id);
 
-        builder.Property(x => x.Id);
+        builder.Property(x => x.Id).ValueGeneratedOnAdd();
 
         builder.Property(x => x.BuildingCode);
 

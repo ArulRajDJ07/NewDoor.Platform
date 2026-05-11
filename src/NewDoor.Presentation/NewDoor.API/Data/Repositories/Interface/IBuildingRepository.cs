@@ -6,5 +6,5 @@
 
     public interface IBuildingRepository : IBaseRepository<Building>, IscopedService
     {
-        // Add custom methods here if needed
+        Task<int> AddRangeAsync(ICollection<Building> buildings);
     }
