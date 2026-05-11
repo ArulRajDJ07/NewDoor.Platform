@@ -89,7 +89,8 @@ namespace NewDoor.API.Controllers
                  await mediator.Send(new FindEntityMetaModelByIdQuery(id));
 
             string apiRootPath = env.ContentRootPath;
-            string solutionRootPath = Path.GetDirectoryName(apiRootPath)!;
+            // Navigate up to src root folder (2 levels from API project)
+            string srcRootPath = Path.GetDirectoryName(Path.GetDirectoryName(apiRootPath))!;
 
             string featurePath = Path.Combine(
                 apiRootPath,
@@ -99,13 +100,16 @@ namespace NewDoor.API.Controllers
 
             request.ApplicationPath = apiRootPath;
             request.FeaturePath = featurePath;
+            // Point to PlatformShared location (code generator adds "Features" folder)
             request.DTOPath = Path.Combine(
-                solutionRootPath,
+                srcRootPath,
+                "NewDoor.PlatformShared",
                 "NewDoor.Platform.DTO",
                 "Features"
             );
             request.EntityPath = Path.Combine(
-                solutionRootPath,
+                srcRootPath,
+                "NewDoor.PlatformShared",
                 "NewDoor.Platform.Entities"
             );
 
