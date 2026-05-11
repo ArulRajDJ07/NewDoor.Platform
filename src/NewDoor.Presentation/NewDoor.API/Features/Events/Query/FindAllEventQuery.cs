@@ -3,5 +3,5 @@
 
     namespace NewDoor.API.Features.Events.Query
     {
-        public record FindAllEventQuery : BaseFindAllQuery<EventResponse>;
+        public record FindAllEventQuery(EventFilterRequest? Filter = null) : BaseFindAllQuery<EventResponse>;
     }

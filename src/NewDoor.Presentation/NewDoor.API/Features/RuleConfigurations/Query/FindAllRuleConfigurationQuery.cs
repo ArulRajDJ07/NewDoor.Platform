@@ -3,5 +3,5 @@
 
     namespace NewDoor.API.Features.RuleConfigurations.Query
     {
-        public record FindAllRuleConfigurationQuery : BaseFindAllQuery<RuleConfigurationResponse>;
+        public record FindAllRuleConfigurationQuery(RuleConfigurationFilterRequest? Filter = null) : BaseFindAllQuery<RuleConfigurationResponse>;
     }

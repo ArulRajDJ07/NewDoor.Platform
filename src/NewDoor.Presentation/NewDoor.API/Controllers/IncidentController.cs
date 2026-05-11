@@ -9,8 +9,8 @@
     public class IncidentController(IMediator mediator) : ControllerBase
     {
         [HttpGet("GetAll")]
-        public async Task<List<IncidentResponse>> GetAll() =>
-            await mediator.Send(new FindAllIncidentQuery());
+        public async Task<List<IncidentResponse>> GetAll([FromQuery] IncidentFilterRequest? filter) =>
+            await mediator.Send(new FindAllIncidentQuery(filter));
 
         [HttpPost]
         public async Task<IncidentResponse> Create([FromBody] AddIncidentRequest request) =>

@@ -1,5 +1,5 @@
     using AutoMapper;
-    using DoWhatta.Platform.Data.Mediator.Handlers;
+    using MediatR;
     using NewDoor.Platform.DTO.Features.Events.Models;
     using NewDoor.Platform.Entities;
     using NewDoor.API.Repositories.Interface;
@@ -7,6 +7,22 @@
 
     namespace NewDoor.API.Features.Events.Handler
     {
-        public class FindAllEventHandler(IMapper mapper, IEventRepository eventRepository)
-            : FindAllHandler<FindAllEventQuery, EventResponse, Event, IEventRepository>(mapper, eventRepository);
+        public class FindAllEventHandler : IRequestHandler<FindAllEventQuery, List<EventResponse>>
+        {
+            private readonly IMapper _mapper;
+            private readonly IEventRepository _eventRepository;
+
+            public FindAllEventHandler(IMapper mapper, IEventRepository eventRepository)
+            {
+                _mapper = mapper;
+                _eventRepository = eventRepository;
+            }
+
+            public async Task<List<EventResponse>> Handle(FindAllEventQuery request, CancellationToken cancellationToken)
+            {
+                var filter = request.Filter ?? new EventFilterRequest();
+                var events = await _eventRepository.GetAllFilteredAsync(filter);
+                return _mapper.Map<List<EventResponse>>(events);
+            }
+        }
     }

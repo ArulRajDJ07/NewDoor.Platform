@@ -20,7 +20,16 @@ namespace NewDoor.API.Features.Buildings.Handler
 
         public async Task<List<BuildingWithDevicesResponse>> Handle(FindAllBuildingsWithDevicesQuery request, CancellationToken cancellationToken)
         {
-            var buildingsWithDevices = await _buildingRepository.GetAllBuildingsWithDevicesAsync();
+            List<(Platform.Entities.Building Building, List<Platform.Entities.Device> Devices)> buildingsWithDevices;
+
+            if (request.Filter != null)
+            {
+                buildingsWithDevices = await _buildingRepository.GetAllBuildingsWithDevicesAsync(request.Filter);
+            }
+            else
+            {
+                buildingsWithDevices = await _buildingRepository.GetAllBuildingsWithDevicesAsync();
+            }
 
             return buildingsWithDevices.Select(bd => new BuildingWithDevicesResponse
             {

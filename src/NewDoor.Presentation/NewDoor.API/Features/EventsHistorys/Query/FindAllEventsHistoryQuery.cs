@@ -3,5 +3,5 @@
 
     namespace NewDoor.API.Features.EventsHistorys.Query
     {
-        public record FindAllEventsHistoryQuery : BaseFindAllQuery<EventsHistoryResponse>;
+        public record FindAllEventsHistoryQuery(EventsHistoryFilterRequest? Filter = null) : BaseFindAllQuery<EventsHistoryResponse>;
     }

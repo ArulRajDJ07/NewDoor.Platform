@@ -3,5 +3,5 @@
 
     namespace NewDoor.API.Features.Devices.Query
     {
-        public record FindAllDeviceQuery : BaseFindAllQuery<DeviceResponse>;
+        public record FindAllDeviceQuery(DeviceFilterRequest? Filter = null) : BaseFindAllQuery<DeviceResponse>;
     }

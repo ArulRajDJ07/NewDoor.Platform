@@ -9,8 +9,8 @@
     public class AlarmController(IMediator mediator) : ControllerBase
     {
         [HttpGet("GetAll")]
-        public async Task<List<AlarmResponse>> GetAll() =>
-            await mediator.Send(new FindAllAlarmQuery());
+        public async Task<List<AlarmResponse>> GetAll([FromQuery] AlarmFilterRequest? filter) =>
+            await mediator.Send(new FindAllAlarmQuery(filter));
 
         [HttpPost]
         public async Task<AlarmResponse> Create([FromBody] AddAlarmRequest request) =>

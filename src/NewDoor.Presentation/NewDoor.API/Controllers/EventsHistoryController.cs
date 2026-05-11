@@ -9,8 +9,8 @@
     public class EventsHistoryController(IMediator mediator) : ControllerBase
     {
         [HttpGet("GetAll")]
-        public async Task<List<EventsHistoryResponse>> GetAll() =>
-            await mediator.Send(new FindAllEventsHistoryQuery());
+        public async Task<List<EventsHistoryResponse>> GetAll([FromQuery] EventsHistoryFilterRequest? filter) =>
+            await mediator.Send(new FindAllEventsHistoryQuery(filter));
 
         [HttpPost]
         public async Task<EventsHistoryResponse> Create([FromBody] AddEventsHistoryRequest request) =>

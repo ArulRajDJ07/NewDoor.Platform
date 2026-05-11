@@ -3,5 +3,5 @@
 
     namespace NewDoor.API.Features.DeviceRuntimeStatuss.Query
     {
-        public record FindAllDeviceRuntimeStatusQuery : BaseFindAllQuery<DeviceRuntimeStatusResponse>;
+        public record FindAllDeviceRuntimeStatusQuery(DeviceRuntimeStatusFilterRequest? Filter = null) : BaseFindAllQuery<DeviceRuntimeStatusResponse>;
     }

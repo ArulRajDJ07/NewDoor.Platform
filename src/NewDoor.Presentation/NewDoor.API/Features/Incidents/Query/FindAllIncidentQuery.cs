@@ -3,5 +3,5 @@
 
     namespace NewDoor.API.Features.Incidents.Query
     {
-        public record FindAllIncidentQuery : BaseFindAllQuery<IncidentResponse>;
+        public record FindAllIncidentQuery(IncidentFilterRequest? Filter = null) : BaseFindAllQuery<IncidentResponse>;
     }

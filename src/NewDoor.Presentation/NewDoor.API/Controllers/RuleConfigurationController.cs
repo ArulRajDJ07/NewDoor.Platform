@@ -9,8 +9,8 @@
     public class RuleConfigurationController(IMediator mediator) : ControllerBase
     {
         [HttpGet("GetAll")]
-        public async Task<List<RuleConfigurationResponse>> GetAll() =>
-            await mediator.Send(new FindAllRuleConfigurationQuery());
+        public async Task<List<RuleConfigurationResponse>> GetAll([FromQuery] RuleConfigurationFilterRequest? filter) =>
+            await mediator.Send(new FindAllRuleConfigurationQuery(filter));
 
         [HttpPost]
         public async Task<RuleConfigurationResponse> Create([FromBody] AddRuleConfigurationRequest request) =>

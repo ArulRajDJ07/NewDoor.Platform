@@ -9,8 +9,8 @@
     public class EventController(IMediator mediator) : ControllerBase
     {
         [HttpGet("GetAll")]
-        public async Task<List<EventResponse>> GetAll() =>
-            await mediator.Send(new FindAllEventQuery());
+        public async Task<List<EventResponse>> GetAll([FromQuery] EventFilterRequest? filter) =>
+            await mediator.Send(new FindAllEventQuery(filter));
 
         [HttpPost]
         public async Task<EventResponse> Create([FromBody] AddEventRequest request) =>

@@ -9,8 +9,8 @@
     public class DeviceRuntimeStatusController(IMediator mediator) : ControllerBase
     {
         [HttpGet("GetAll")]
-        public async Task<List<DeviceRuntimeStatusResponse>> GetAll() =>
-            await mediator.Send(new FindAllDeviceRuntimeStatusQuery());
+        public async Task<List<DeviceRuntimeStatusResponse>> GetAll([FromQuery] DeviceRuntimeStatusFilterRequest? filter) =>
+            await mediator.Send(new FindAllDeviceRuntimeStatusQuery(filter));
 
         [HttpPost]
         public async Task<DeviceRuntimeStatusResponse> Create([FromBody] AddDeviceRuntimeStatusRequest request) =>

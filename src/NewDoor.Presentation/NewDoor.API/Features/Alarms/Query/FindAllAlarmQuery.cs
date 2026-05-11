@@ -3,5 +3,5 @@
 
     namespace NewDoor.API.Features.Alarms.Query
     {
-        public record FindAllAlarmQuery : BaseFindAllQuery<AlarmResponse>;
+        public record FindAllAlarmQuery(AlarmFilterRequest? Filter = null) : BaseFindAllQuery<AlarmResponse>;
     }

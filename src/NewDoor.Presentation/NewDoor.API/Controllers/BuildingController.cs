@@ -13,8 +13,8 @@
             await mediator.Send(new FindAllBuildingQuery());
 
         [HttpGet("GetAllWithDevices")]
-        public async Task<List<BuildingWithDevicesResponse>> GetAllWithDevices() =>
-            await mediator.Send(new FindAllBuildingsWithDevicesQuery());
+        public async Task<List<BuildingWithDevicesResponse>> GetAllWithDevices([FromQuery] BuildingFilterRequest? filter) =>
+            await mediator.Send(new FindAllBuildingsWithDevicesQuery(filter));
 
         [HttpPost]
         public async Task<BuildingResponse> Create([FromBody] AddBuildingRequest request) =>

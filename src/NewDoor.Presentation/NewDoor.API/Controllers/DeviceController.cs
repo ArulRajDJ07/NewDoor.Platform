@@ -9,8 +9,8 @@
     public class DeviceController(IMediator mediator) : ControllerBase
     {
         [HttpGet("GetAll")]
-        public async Task<List<DeviceResponse>> GetAll() =>
-            await mediator.Send(new FindAllDeviceQuery());
+        public async Task<List<DeviceResponse>> GetAll([FromQuery] DeviceFilterRequest? filter) =>
+            await mediator.Send(new FindAllDeviceQuery(filter));
 
         [HttpPost]
         public async Task<DeviceResponse> Create([FromBody] AddDeviceRequest request) =>
