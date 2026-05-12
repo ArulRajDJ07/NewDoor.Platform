@@ -5,10 +5,46 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <BlazorDisableThrowNavigationException>true</BlazorDisableThrowNavigationException>
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+    <PublishReadyToRun>false</PublishReadyToRun>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <PlatformTarget>x64</PlatformTarget>
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="Confluent.Kafka" />
+    <PackageReference Include="librdkafka.redist" />
+  </ItemGroup>
+
+  <Target Name="CopyLibrdkafka" AfterTargets="Build" Condition="'$(TargetFramework)' == 'net10.0'">
+    <PropertyGroup>
+      <LibrdkafkaBasePath>$(NuGetPackageRoot)librdkafka.redist</LibrdkafkaBasePath>
+    </PropertyGroup>
+
+    <Message Text="=== librdkafka Copy Target ===" Importance="high" />
+    <Message Text="NuGet Root: $(NuGetPackageRoot)" Importance="high" />
+    <Message Text="Output Directory: $(OutDir)" Importance="high" />
+    <Message Text="Platform Target: $(PlatformTarget)" Importance="high" />
+
+    <ItemGroup>
+      <LibrdkafkaFiles Include="$(LibrdkafkaBasePath)\**\runtimes\win-x64\native\*.dll" />
+    </ItemGroup>
+
+    <Message Text="Found @(LibrdkafkaFiles->Count()) native library files" Importance="high" />
+    <Message Text="Files: @(LibrdkafkaFiles)" Importance="high" />
+
+    <Copy SourceFiles="@(LibrdkafkaFiles)" 
+          DestinationFolder="$(OutDir)" 
+          SkipUnchangedFiles="true" 
+          Condition="'@(LibrdkafkaFiles)' != ''" />
+
+    <Message Text="? Copied librdkafka native libraries to output directory" Importance="high" Condition="'@(LibrdkafkaFiles)' != ''" />
+    <Warning Text="? No librdkafka native files found at: $(LibrdkafkaBasePath)" Condition="'@(LibrdkafkaFiles)' == ''" />
+  </Target>
+
+  <ItemGroup>
     <ProjectReference Include="..\..\NewDoor.PlatformShared\NewDoor.Platform.DTO\NewDoor.Platform.DTO.csproj" />
+    <ProjectReference Include="..\..\NewDoor.StreamingRuntime\NewDoor.EventBus\NewDoor.EventBus.csproj" />
   </ItemGroup>
 
   <ItemGroup>

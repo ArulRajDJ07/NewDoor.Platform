@@ -6,6 +6,14 @@
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
 
+  <PropertyGroup Condition="'$(OS)' == 'Windows_NT'">
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(OS)' != 'Windows_NT'">
+    <RuntimeIdentifier>linux-x64</RuntimeIdentifier>
+  </PropertyGroup>
+
 
   <ItemGroup>
     <!-- Azure Services -->
@@ -62,7 +70,10 @@
     <PackageReference Include="Swashbuckle.AspNetCore.SwaggerUI" />
 
     <!-- Kafka Native Library -->
-    <PackageReference Include="librdkafka.redist" />
+    <PackageReference Include="librdkafka.redist">
+      <IncludeAssets>all</IncludeAssets>
+      <PrivateAssets>none</PrivateAssets>
+    </PackageReference>
   </ItemGroup>
 
   <ItemGroup>

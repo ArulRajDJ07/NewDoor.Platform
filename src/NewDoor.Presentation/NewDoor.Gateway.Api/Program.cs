@@ -46,6 +46,8 @@ namespace NewDoor.Gateway.Api
                 config.BootstrapServers = builder.Configuration["Kafka:BootstrapServers"] ?? "pkc-619z3.us-east1.gcp.confluent.cloud:9092";
                 config.Username = builder.Configuration["Kafka:Username"] ?? "";
                 config.Password = builder.Configuration["Kafka:Password"] ?? "";
+                config.MessageTimeoutMs = builder.Configuration.GetValue<int>("Kafka:MessageTimeoutMs", 300000);
+                config.RequestTimeoutMs = builder.Configuration.GetValue<int>("Kafka:RequestTimeoutMs", 300000);
             });
 
             // Add Device Enrichment Service
