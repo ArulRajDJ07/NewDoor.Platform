@@ -6,9 +6,13 @@ namespace NewDoor.EventBus.Producers;
 
 public class KafkaProducer : IKafkaProducer, IAsyncDisposable
 {
-    private readonly IProducer<string, string> _producer;
+    private IProducer<string, string>? _producer;
+    private readonly KafkaProducerConfig _config;
     private readonly ILogger<KafkaProducer> _logger;
     private readonly JsonSerializerOptions _jsonOptions;
+    private readonly object _lock = new object();
+    private bool _initializationFailed = false;
+    private Exception? _initializationException;
     private const int MaxRetries = 3;
     private static readonly TimeSpan[] RetryDelays = 
     {
@@ -19,44 +23,141 @@ public class KafkaProducer : IKafkaProducer, IAsyncDisposable
 
     public KafkaProducer(KafkaProducerConfig config, ILogger<KafkaProducer> logger)
     {
-        _logger = logger;
+        _config = config ?? throw new ArgumentNullException(nameof(config));
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _jsonOptions = new JsonSerializerOptions
         {
             PropertyNamingPolicy = JsonNamingPolicy.CamelCase
         };
 
-        var producerConfig = new ProducerConfig
+        _logger.LogInformation("KafkaProducer service registered (lazy initialization). Bootstrap: {BootstrapServers}", config.BootstrapServers);
+    }
+
+    private IProducer<string, string> GetOrCreateProducer()
+    {
+        if (_producer != null)
+            return _producer;
+
+        if (_initializationFailed)
         {
-            BootstrapServers = config.BootstrapServers,
-            SecurityProtocol = SecurityProtocol.SaslSsl,
-            SaslMechanism = SaslMechanism.Plain,
-            SaslUsername = config.Username,
-            SaslPassword = config.Password,
-            Acks = Acks.Leader,
-            EnableIdempotence = false,
-            CompressionType = CompressionType.Snappy,
-            LingerMs = 10,
-            BatchSize = 32768,
-            QueueBufferingMaxMessages = 100000,
-            QueueBufferingMaxKbytes = 1048576,
-            MessageTimeoutMs = config.MessageTimeoutMs,
-            RequestTimeoutMs = config.RequestTimeoutMs,
-            SocketTimeoutMs = config.MessageTimeoutMs,
-            MessageSendMaxRetries = 3,
-            RetryBackoffMs = 1000,
-            SocketKeepaliveEnable = true
-        };
+            var errorMessage = "Kafka producer initialization previously failed. ";
+            if (_initializationException is DllNotFoundException)
+            {
+                errorMessage += "Missing native librdkafka library. This typically occurs when running on an unsupported platform (e.g., Windows ARM64). " +
+                               "Solution: Set <PlatformTarget>x64</PlatformTarget> in your project file or run on a supported platform (win-x64, linux-x64).";
+            }
+            else
+            {
+                errorMessage += "Check logs for details.";
+            }
+            throw new InvalidOperationException(errorMessage, _initializationException);
+        }
 
-        _producer = new ProducerBuilder<string, string>(producerConfig)
-            .SetErrorHandler((_, e) => _logger.LogError("Kafka error: Code={Code}, Reason={Reason}, IsBrokerError={IsBrokerError}", 
-                e.Code, e.Reason, e.IsBrokerError))
-            .Build();
+        lock (_lock)
+        {
+            if (_producer != null)
+                return _producer;
 
-        _logger.LogInformation("Kafka producer initialized: {BootstrapServers}", config.BootstrapServers);
+            if (_initializationFailed)
+            {
+                var errorMessage = "Kafka producer initialization previously failed. ";
+                if (_initializationException is DllNotFoundException)
+                {
+                    errorMessage += "Missing native librdkafka library. This typically occurs when running on an unsupported platform (e.g., Windows ARM64). " +
+                                   "Solution: Set <PlatformTarget>x64</PlatformTarget> in your project file or run on a supported platform (win-x64, linux-x64).";
+                }
+                else
+                {
+                    errorMessage += "Check logs for details.";
+                }
+                throw new InvalidOperationException(errorMessage, _initializationException);
+            }
+
+            try
+            {
+                _logger.LogInformation("Initializing Kafka producer connection...");
+
+                var producerConfig = new ProducerConfig
+                {
+                    BootstrapServers = _config.BootstrapServers,
+                    SecurityProtocol = SecurityProtocol.SaslSsl,
+                    SaslMechanism = SaslMechanism.Plain,
+                    SaslUsername = _config.Username,
+                    SaslPassword = _config.Password,
+                    Acks = Acks.Leader,
+                    EnableIdempotence = false,
+                    CompressionType = CompressionType.Snappy,
+                    LingerMs = 10,
+                    BatchSize = 32768,
+                    QueueBufferingMaxMessages = 100000,
+                    QueueBufferingMaxKbytes = 1048576,
+                    MessageTimeoutMs = _config.MessageTimeoutMs,
+                    RequestTimeoutMs = _config.RequestTimeoutMs,
+                    SocketTimeoutMs = _config.MessageTimeoutMs,
+                    MessageSendMaxRetries = 3,
+                    RetryBackoffMs = 1000,
+                    SocketKeepaliveEnable = true
+                };
+
+                _producer = new ProducerBuilder<string, string>(producerConfig)
+                    .SetErrorHandler((_, e) => _logger.LogError("Kafka error: Code={Code}, Reason={Reason}, IsBrokerError={IsBrokerError}", 
+                        e.Code, e.Reason, e.IsBrokerError))
+                    .Build();
+
+                _logger.LogInformation("Kafka producer initialized successfully: {BootstrapServers}", _config.BootstrapServers);
+                return _producer;
+            }
+            catch (DllNotFoundException ex)
+            {
+                _initializationFailed = true;
+                _initializationException = ex;
+                _logger.LogError(ex, 
+                    "Failed to initialize Kafka producer: Missing native librdkafka library. " +
+                    "This typically occurs when running on an unsupported platform (e.g., Windows ARM64). " +
+                    "Current Runtime: {RuntimeIdentifier}. " +
+                    "Solution: Set <PlatformTarget>x64</PlatformTarget> in your project file or run on a supported platform. " +
+                    "Bootstrap: {BootstrapServers}",
+                    System.Runtime.InteropServices.RuntimeInformation.RuntimeIdentifier,
+                    _config.BootstrapServers);
+                throw;
+            }
+            catch (Exception ex)
+            {
+                _initializationFailed = true;
+                _initializationException = ex;
+                _logger.LogError(ex, "Failed to initialize Kafka producer. Bootstrap: {BootstrapServers}", _config.BootstrapServers);
+                throw;
+            }
+        }
     }
 
     public async Task PublishAsync<T>(string topic, string key, T message, CancellationToken cancellationToken = default)
     {
+        IProducer<string, string> producer;
+
+        try
+        {
+            producer = GetOrCreateProducer();
+        }
+        catch (InvalidOperationException ex) when (_initializationException is DllNotFoundException)
+        {
+            _logger.LogError(ex, 
+                "Cannot publish to Kafka - Producer initialization failed due to missing native library. " +
+                "Running on unsupported platform: {RuntimeIdentifier}. " +
+                "Topic={Topic}, Key={Key}",
+                System.Runtime.InteropServices.RuntimeInformation.RuntimeIdentifier,
+                topic, key);
+            throw new InvalidOperationException(
+                $"Kafka producer unavailable on this platform ({System.Runtime.InteropServices.RuntimeInformation.RuntimeIdentifier}). " +
+                "Missing librdkafka native library. Set <PlatformTarget>x64</PlatformTarget> in project file and rebuild.", 
+                ex);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Cannot publish to Kafka - Producer initialization failed: Topic={Topic}, Key={Key}", topic, key);
+            throw;
+        }
+
         var json = JsonSerializer.Serialize(message, _jsonOptions);
         var kafkaMessage = new Message<string, string>
         {
@@ -69,7 +170,7 @@ public class KafkaProducer : IKafkaProducer, IAsyncDisposable
         {
             try
             {
-                var result = await _producer.ProduceAsync(topic, kafkaMessage, cancellationToken);
+                var result = await producer.ProduceAsync(topic, kafkaMessage, cancellationToken);
 
                 _logger.LogDebug("Published to Kafka: Topic={Topic}, Partition={Partition}, Offset={Offset}, Key={Key}", 
                     topic, result.Partition.Value, result.Offset.Value, key);
@@ -137,8 +238,20 @@ public class KafkaProducer : IKafkaProducer, IAsyncDisposable
 
     public async Task PublishBatchAsync<T>(string topic, IEnumerable<(string Key, T Message)> messages, CancellationToken cancellationToken = default)
     {
-        var tasks = messages.Select(m => PublishAsync(topic, m.Key, m.Message, cancellationToken));
-        await Task.WhenAll(tasks);
+        try
+        {
+            var tasks = messages.Select(m => PublishAsync(topic, m.Key, m.Message, cancellationToken));
+            await Task.WhenAll(tasks);
+        }
+        catch (InvalidOperationException ex) when (_initializationException is DllNotFoundException)
+        {
+            _logger.LogError(ex, 
+                "Cannot publish batch to Kafka - Producer initialization failed due to missing native library. " +
+                "Running on unsupported platform: {RuntimeIdentifier}. Topic={Topic}",
+                System.Runtime.InteropServices.RuntimeInformation.RuntimeIdentifier,
+                topic);
+            throw;
+        }
     }
 
     public async ValueTask DisposeAsync()

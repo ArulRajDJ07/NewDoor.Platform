@@ -1,14 +1,6 @@
-using DoWhatta.Platform.Builder;
-using DoWhatta.Platform.Builder.Output;
-using DoWhatta.Platform.Builder.Output.Writers;
-using DoWhatta.Platform.Core.Common;
-using DoWhatta.Platform.Core.Settings;
-using DoWhatta.Platform.Data.Extensions;
-using DoWhatta.Platform.Infrastructure.HttpClients;
-using DoWhatta.Platform.Infrastructure.Messaging.ServiceBus;
-using NewDoor.Gateway.Api.Settings;
 using NewDoor.Gateway.Api.Services;
 using NewDoor.EventBus.Extensions;
+using Serilog;
 
 namespace NewDoor.Gateway.Api
 {
@@ -16,51 +8,108 @@ namespace NewDoor.Gateway.Api
     {
         public static void Main(string[] args)
         {
-            var builder = WebApplication.CreateBuilder(args);
-
-            // Add CORS policy
-            builder.Services.AddCors(options =>
+            try
             {
-                options.AddPolicy("AllowBlazorClient",
-                    policy =>
+                var builder = WebApplication.CreateBuilder(args);
+
+                // Configure Serilog
+                Log.Logger = new LoggerConfiguration()
+                    .ReadFrom.Configuration(builder.Configuration)
+                    .Enrich.FromLogContext()
+                    .WriteTo.Console()
+                    .CreateLogger();
+
+                builder.Host.UseSerilog();
+
+                // Configure CORS for Blazor clients
+                builder.Services.AddCors(options =>
+                {
+                    options.AddPolicy("AllowBlazorClient",
+                        policy =>
+                        {
+                            policy
+                                 .WithOrigins(
+                                     "https://localhost:7092",
+                                     "http://localhost:7092",
+                                     "https://dowhatta.azurewebsites.net",
+                                     "https://newdoor-simulator.azurewebsites.net"
+                                 )
+                                 .AllowAnyHeader()
+                                 .AllowAnyMethod()
+                                 .AllowCredentials();
+                        });
+                });
+
+                // Configure API controllers and Swagger
+                builder.Services.AddControllers();
+                builder.Services.AddEndpointsApiExplorer();
+                builder.Services.AddSwaggerGen(c =>
+                {
+                    c.SwaggerDoc("v1", new Microsoft.OpenApi.Models.OpenApiInfo
                     {
-                        policy
-                             .WithOrigins(
-                                 "https://localhost:7092",
-                                 "http://localhost:7092",
-                                 "https://dowhatta.azurewebsites.net",
-                                 "https://newdoor-simulator.azurewebsites.net"
-                             )
-                             .AllowAnyHeader()
-                             .AllowAnyMethod()
-                             .AllowCredentials();
+                        Title = "NewDoor Gateway API",
+                        Version = "v1",
+                        Description = "IoT Device Telemetry Ingestion API - Kafka Integration"
                     });
-            });
+                });
 
-            builder.WebHost.AddApplicationConfiguration<ApplicationSettings>();            
-            builder.Services.AddPlatformServices(builder.Configuration);
+                // Configure Kafka Producer
+                builder.Services.AddKafkaProducer(config =>
+                {
+                    config.BootstrapServers = builder.Configuration["Kafka:BootstrapServers"] ?? "";
+                    config.Username = builder.Configuration["Kafka:Username"] ?? "";
+                    config.Password = builder.Configuration["Kafka:Password"] ?? "";
+                    config.MessageTimeoutMs = int.Parse(builder.Configuration["Kafka:MessageTimeoutMs"] ?? "300000");
+                    config.RequestTimeoutMs = int.Parse(builder.Configuration["Kafka:RequestTimeoutMs"] ?? "300000");
+                });
 
-            // Add Kafka Producer
-            builder.Services.AddKafkaProducer(config =>
+                // Add Device Enrichment Service
+                builder.Services.AddSingleton<IDeviceEnrichmentService, DeviceEnrichmentService>();
+
+                var app = builder.Build();
+
+                // Enable Swagger
+                app.UseSwagger();
+                app.UseSwaggerUI(c =>
+                {
+                    c.SwaggerEndpoint("/swagger/v1/swagger.json", "NewDoor Gateway API v1");
+                    c.RoutePrefix = "swagger";
+                    c.DocumentTitle = "NewDoor Gateway API Documentation";
+                });
+
+                // Configure middleware pipeline
+                app.UseCors("AllowBlazorClient");
+                app.UseHttpsRedirection();
+                app.UseAuthorization();
+                app.MapControllers();
+
+                // Health check endpoint
+                app.MapGet("/health", () => new { status = "healthy", service = "NewDoor.Gateway.Api", timestamp = DateTime.UtcNow })
+                   .WithTags("Health")
+                   .WithName("GetHealth")
+                   .Produces(200);
+
+                // Root endpoint - redirect to Swagger
+                app.MapGet("/", (HttpContext context) => 
+                {
+                    context.Response.Redirect("/swagger");
+                    return Task.CompletedTask;
+                })
+                .ExcludeFromDescription();
+
+                Log.Information("NewDoor Gateway API starting...");
+
+                app.Run();
+            }
+            catch (Exception ex)
             {
-                config.BootstrapServers = builder.Configuration["Kafka:BootstrapServers"] ?? "pkc-619z3.us-east1.gcp.confluent.cloud:9092";
-                config.Username = builder.Configuration["Kafka:Username"] ?? "";
-                config.Password = builder.Configuration["Kafka:Password"] ?? "";
-                config.MessageTimeoutMs = builder.Configuration.GetValue<int>("Kafka:MessageTimeoutMs", 300000);
-                config.RequestTimeoutMs = builder.Configuration.GetValue<int>("Kafka:RequestTimeoutMs", 300000);
-            });
-
-            // Add Device Enrichment Service
-            builder.Services.AddHttpClient();
-            builder.Services.AddSingleton<IDeviceEnrichmentService, DeviceEnrichmentService>();
-
-            var app = builder.Build();
-
-            app.UseCors("AllowBlazorClient");
-            app.ConfigureApplication();
-
-            app.Run();
+                Log.Fatal(ex, "Application startup failed");
+                throw;
+            }
+            finally
+            {
+                Log.CloseAndFlush();
+            }
         }
     }
 }
-

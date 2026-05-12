@@ -8,7 +8,7 @@ public class DeviceTelemetryRequest
     public string Status { get; set; } = string.Empty;
     public int BatteryLevel { get; set; }
     public double? Temperature { get; set; }
-    public int? SmokeLevel { get; set; }
+    public double? SmokeLevel { get; set; }
     public string? SignalStrength { get; set; }
 }
 
@@ -33,7 +33,7 @@ public class EnrichedTelemetryEvent
 public class TelemetryPayload
 {
     public double Temperature { get; set; }
-    public int SmokeLevel { get; set; }
+    public double SmokeLevel { get; set; }
     public int BatteryLevel { get; set; }
     public string SignalStrength { get; set; } = string.Empty;
     public string Status { get; set; } = string.Empty;

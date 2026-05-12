@@ -19,6 +19,19 @@ public static class KafkaServiceExtensions
         return services;
     }
 
+    public static IServiceCollection AddServiceBusProducer(
+        this IServiceCollection services,
+        Action<ServiceBusProducerConfig> configureOptions)
+    {
+        var config = new ServiceBusProducerConfig();
+        configureOptions(config);
+
+        services.AddSingleton(config);
+        services.AddSingleton<IKafkaProducer, ServiceBusProducer>();
+
+        return services;
+    }
+
     public static IServiceCollection AddKafkaConsumer<T, THandler>(
         this IServiceCollection services,
         Action<KafkaConsumerConfig> configureOptions)

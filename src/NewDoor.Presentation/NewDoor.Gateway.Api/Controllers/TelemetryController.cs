@@ -44,10 +44,20 @@ public class TelemetryController : ControllerBase
 
             return Accepted(new { eventId = enrichedEvent.EventId, status = "queued" });
         }
+        catch (InvalidOperationException ex) when (ex.Message.Contains("platform") || ex.Message.Contains("librdkafka"))
+        {
+            _logger.LogError(ex, "Platform compatibility error for DeviceId={DeviceId}. Kafka unavailable on this platform.", request.DeviceId);
+            return StatusCode(503, new 
+            { 
+                error = "Kafka service unavailable on this platform",
+                detail = "The application is running on an unsupported platform. Please rebuild with x64 target or deploy to a supported platform.",
+                deviceId = request.DeviceId
+            });
+        }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to process telemetry for DeviceId={DeviceId}", request.DeviceId);
-            return StatusCode(500, new { error = "Failed to process telemetry" });
+            return StatusCode(500, new { error = "Failed to process telemetry", deviceId = request.DeviceId });
         }
     }
 
@@ -59,7 +69,7 @@ public class TelemetryController : ControllerBase
             _logger.LogInformation("Received batch telemetry: Count={Count}", requests.Count);
 
             var enrichedEvents = new List<(string Key, EnrichedTelemetryEvent Message)>();
-            
+
             foreach (var request in requests)
             {
                 var enrichedEvent = await _enrichmentService.EnrichTelemetryAsync(request);
@@ -73,6 +83,16 @@ public class TelemetryController : ControllerBase
                 enrichedEvents.Count, topic);
 
             return Accepted(new { count = enrichedEvents.Count, status = "queued" });
+        }
+        catch (InvalidOperationException ex) when (ex.Message.Contains("platform") || ex.Message.Contains("librdkafka"))
+        {
+            _logger.LogError(ex, "Platform compatibility error for batch telemetry. Kafka unavailable on this platform.");
+            return StatusCode(503, new 
+            { 
+                error = "Kafka service unavailable on this platform",
+                detail = "The application is running on an unsupported platform. Please rebuild with x64 target or deploy to a supported platform.",
+                count = requests.Count
+            });
         }
         catch (Exception ex)
         {
