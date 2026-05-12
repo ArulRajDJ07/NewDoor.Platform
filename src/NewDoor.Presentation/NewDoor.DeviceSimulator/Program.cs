@@ -16,8 +16,8 @@ builder.Services.AddHttpClient<ApiClientService>(client =>
 
 builder.Services.AddSingleton<DeviceService>();
 builder.Services.AddSingleton<EventBufferService>();
-builder.Services.AddSingleton<FakeTelemetryGeneratorService>();
-builder.Services.AddSingleton<KafkaProducerService>();
+builder.Services.AddSingleton<TelemetryGeneratorService>();
+builder.Services.AddSingleton<TelemetryClientService>();
 builder.Services.AddSingleton<SimulationEngineService>();
 
 var app = builder.Build();

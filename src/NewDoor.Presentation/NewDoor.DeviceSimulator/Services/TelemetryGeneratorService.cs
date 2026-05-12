@@ -4,7 +4,7 @@ using NewDoor.Platform.DTO.Features.Devices.Models;
 
 namespace NewDoor.DeviceSimulator.Services;
 
-public class FakeTelemetryGeneratorService
+public class TelemetryGeneratorService
 {
     private readonly Random _random = new();
 

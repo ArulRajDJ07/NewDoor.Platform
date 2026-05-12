@@ -7,9 +7,9 @@ namespace NewDoor.DeviceSimulator.Services;
 public class SimulationEngineService
 {
     private readonly DeviceService _deviceService;
-    private readonly FakeTelemetryGeneratorService _telemetryGenerator;
+    private readonly TelemetryGeneratorService _telemetryGenerator;
     private readonly EventBufferService _eventBuffer;
-    private readonly KafkaProducerService _kafkaProducer;
+    private readonly TelemetryClientService _telemetryClient;
     private readonly ILogger<SimulationEngineService> _logger;
 
     private CancellationTokenSource? _cancellationTokenSource;
@@ -28,15 +28,15 @@ public class SimulationEngineService
 
     public SimulationEngineService(
         DeviceService deviceService,
-        FakeTelemetryGeneratorService telemetryGenerator,
+        TelemetryGeneratorService telemetryGenerator,
         EventBufferService eventBuffer,
-        KafkaProducerService kafkaProducer,
+        TelemetryClientService telemetryClient,
         ILogger<SimulationEngineService> logger)
     {
         _deviceService = deviceService;
         _telemetryGenerator = telemetryGenerator;
         _eventBuffer = eventBuffer;
-        _kafkaProducer = kafkaProducer;
+        _telemetryClient = telemetryClient;
         _logger = logger;
     }
 
@@ -44,7 +44,6 @@ public class SimulationEngineService
     {
         if (_isRunning)
         {
-            _logger.LogWarning("Simulation already running");
             return;
         }
 
@@ -89,20 +88,17 @@ public class SimulationEngineService
         var device = _deviceService.GetDevice(deviceId);
         if (device == null)
         {
-            _logger.LogWarning("Device {DeviceId} not found", deviceId);
             return;
         }
 
         var building = _deviceService.GetBuilding(device.BuildingId);
         if (building == null)
         {
-            _logger.LogWarning("Building {BuildingId} not found", device.BuildingId);
             return;
         }
 
         var payload = _telemetryGenerator.GenerateTelemetry(device, building, eventType);
-
-        await _kafkaProducer.PublishTelemetryAsync(payload);
+        await _telemetryClient.PublishTelemetryAsync(payload);
 
         var eventLog = new EventLogModel
         {
@@ -115,15 +111,12 @@ public class SimulationEngineService
 
         _eventBuffer.AddEvent(eventLog);
         Interlocked.Increment(ref _eventsGenerated);
-
-        _logger.LogInformation("Triggered {EventType} for device {DeviceId}", eventType, device.DeviceId);
     }
 
     public async Task TriggerPeakLoadAsync()
     {
         if (_isRunning)
         {
-            _logger.LogWarning("Cannot trigger peak load while simulation is running");
             return;
         }
 
@@ -136,7 +129,7 @@ public class SimulationEngineService
             DurationSeconds = 60
         };
 
-        _logger.LogInformation("Triggering PEAK LOAD: 50,000 events/sec across ALL buildings for 60 seconds");
+        _logger.LogInformation("Starting peak load test: 50,000 events/sec for 60 seconds");
         await StartSimulationAsync(settings);
     }
 
@@ -147,9 +140,6 @@ public class SimulationEngineService
             var endTime = DateTime.UtcNow.AddSeconds(settings.DurationSeconds);
             var eventsSinceLastCheck = 0;
             var lastCheckTime = DateTime.UtcNow;
-
-            _logger.LogInformation("Starting simulation: {EventsPerSecond} events/sec for {Duration} seconds", 
-                settings.EventsPerSecond, settings.DurationSeconds);
 
             if (settings.EventsPerSecond > 100)
             {
@@ -198,15 +188,15 @@ public class SimulationEngineService
                 }
             }
 
-            _logger.LogInformation("Simulation completed. Total events: {EventCount}", _eventsGenerated);
+            _logger.LogInformation("Simulation completed: {EventCount} events", _eventsGenerated);
         }
         catch (OperationCanceledException)
         {
-            _logger.LogInformation("Simulation cancelled");
+            _logger.LogInformation("Simulation stopped");
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Simulation error");
+            _logger.LogError(ex, "Simulation error occurred");
         }
         finally
         {
@@ -227,21 +217,18 @@ public class SimulationEngineService
 
         if (!devices.Any() || devices.All(d => d == null))
         {
-            _logger.LogWarning("No devices found for event generation");
             return;
         }
 
         var device = devices.Where(d => d != null).OrderBy(_ => Random.Shared.Next()).FirstOrDefault();
         if (device == null) 
         {
-            _logger.LogWarning("Device is null after selection");
             return;
         }
 
         var building = _deviceService.GetBuilding(device.BuildingId);
         if (building == null) 
         {
-            _logger.LogWarning("Building {BuildingId} not found for device {DeviceId}", device.BuildingId, device.DeviceId);
             return;
         }
 
@@ -264,11 +251,11 @@ public class SimulationEngineService
         {
             try 
             { 
-                await _kafkaProducer.PublishTelemetryAsync(payload); 
+                await _telemetryClient.PublishTelemetryAsync(payload); 
             } 
-            catch (Exception ex) 
+            catch 
             { 
-                _logger.LogError(ex, "Failed to publish to Gateway"); 
+                // Errors already logged in TelemetryClientService
             }
         });
 
