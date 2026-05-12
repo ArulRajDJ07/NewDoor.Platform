@@ -60,6 +60,9 @@
     <PackageReference Include="Swashbuckle.AspNetCore.Annotations" />
     <PackageReference Include="Swashbuckle.AspNetCore.SwaggerGen" />
     <PackageReference Include="Swashbuckle.AspNetCore.SwaggerUI" />
+
+    <!-- Kafka Native Library -->
+    <PackageReference Include="librdkafka.redist" />
   </ItemGroup>
 
   <ItemGroup>
@@ -72,6 +75,10 @@
     <Reference Include="DoWhatta.Platform.Entities">
       <HintPath>..\..\Resource\dowhatta\DoWhatta.Platform.Entities.dll</HintPath>
     </Reference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\NewDoor.StreamingRuntime\NewDoor.EventBus\NewDoor.EventBus.csproj" />
   </ItemGroup>
 
 </Project>

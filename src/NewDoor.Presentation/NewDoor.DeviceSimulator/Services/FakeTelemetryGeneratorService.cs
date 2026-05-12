@@ -8,80 +8,79 @@ public class FakeTelemetryGeneratorService
 {
     private readonly Random _random = new();
 
-    public DeviceTelemetryEvent GenerateTelemetry(
+    public DeviceTelemetryPayload GenerateTelemetry(
         DeviceResponse device, 
         BuildingWithDevicesResponse building, 
         string eventType = "Heartbeat")
     {
-        var telemetry = new DeviceTelemetryEvent
+        var payload = new DeviceTelemetryPayload
         {
-            EventId = Guid.NewGuid().ToString(),
-            CorrelationId = Guid.NewGuid().ToString(),
-            EventName = "DeviceTelemetryReceived",
-            EventType = eventType,
             DeviceId = device.DeviceId,
-            DeviceName = device.DeviceName,
-            DeviceType = device.DeviceType,
-            BuildingId = building.Id,
-            BuildingCode = building.BuildingCode,
-            Floor = device.Floor,
-            Zone = device.Zone,
+            EventType = eventType,
             TimestampUtc = DateTime.UtcNow,
-            Payload = GeneratePayload(eventType),
-            Metadata = new TelemetryMetadata
-            {
-                Source = "NewDoor.DeviceSimulator",
-                GeneratedUtc = DateTime.UtcNow
-            }
+            Status = GetStatusForEventType(eventType),
+            BatteryLevel = GetBatteryLevel(eventType),
+            Temperature = GetTemperature(eventType),
+            SmokeLevel = GetSmokeLevel(eventType),
+            SignalStrength = GetSignalStrength(eventType)
         };
 
-        return telemetry;
+        return payload;
     }
 
-    private TelemetryPayload GeneratePayload(string eventType)
+    private string GetStatusForEventType(string eventType)
     {
         return eventType switch
         {
-            "SmokeDetected" => new TelemetryPayload
-            {
-                Temperature = _random.Next(45, 80),
-                SmokeLevel = _random.Next(60, 100),
-                BatteryLevel = _random.Next(70, 100),
-                SignalStrength = "Strong",
-                Status = "Alarm"
-            },
-            "HeatSpike" => new TelemetryPayload
-            {
-                Temperature = _random.Next(50, 100),
-                SmokeLevel = _random.Next(0, 30),
-                BatteryLevel = _random.Next(70, 100),
-                SignalStrength = "Strong",
-                Status = "Warning"
-            },
-            "DeviceOffline" => new TelemetryPayload
-            {
-                Temperature = 0,
-                SmokeLevel = 0,
-                BatteryLevel = 0,
-                SignalStrength = "None",
-                Status = "Offline"
-            },
-            "DeviceFailure" => new TelemetryPayload
-            {
-                Temperature = 0,
-                SmokeLevel = 0,
-                BatteryLevel = _random.Next(0, 20),
-                SignalStrength = "Weak",
-                Status = "Failure"
-            },
-            _ => new TelemetryPayload
-            {
-                Temperature = _random.Next(20, 35),
-                SmokeLevel = _random.Next(0, 10),
-                BatteryLevel = _random.Next(70, 100),
-                SignalStrength = GetRandomSignalStrength(),
-                Status = "Online"
-            }
+            "SmokeDetected" => "Alarm",
+            "HeatSpike" => "Warning",
+            "DeviceOffline" => "Offline",
+            "DeviceFailure" => "Failure",
+            _ => "Online"
+        };
+    }
+
+    private int GetBatteryLevel(string eventType)
+    {
+        return eventType switch
+        {
+            "DeviceOffline" => 0,
+            "DeviceFailure" => _random.Next(0, 20),
+            _ => _random.Next(70, 100)
+        };
+    }
+
+    private double? GetTemperature(string eventType)
+    {
+        return eventType switch
+        {
+            "SmokeDetected" => _random.Next(45, 80),
+            "HeatSpike" => _random.Next(50, 100),
+            "DeviceOffline" => 0,
+            "DeviceFailure" => 0,
+            _ => _random.Next(20, 35)
+        };
+    }
+
+    private int? GetSmokeLevel(string eventType)
+    {
+        return eventType switch
+        {
+            "SmokeDetected" => _random.Next(60, 100),
+            "HeatSpike" => _random.Next(0, 30),
+            "DeviceOffline" => 0,
+            "DeviceFailure" => 0,
+            _ => _random.Next(0, 10)
+        };
+    }
+
+    private string? GetSignalStrength(string eventType)
+    {
+        return eventType switch
+        {
+            "DeviceOffline" => "None",
+            "DeviceFailure" => "Weak",
+            _ => GetRandomSignalStrength()
         };
     }
 

@@ -7,6 +7,8 @@ using DoWhatta.Platform.Data.Extensions;
 using DoWhatta.Platform.Infrastructure.HttpClients;
 using DoWhatta.Platform.Infrastructure.Messaging.ServiceBus;
 using NewDoor.Gateway.Api.Settings;
+using NewDoor.Gateway.Api.Services;
+using NewDoor.EventBus.Extensions;
 
 namespace NewDoor.Gateway.Api
 {
@@ -24,29 +26,39 @@ namespace NewDoor.Gateway.Api
                     {
                         policy
                              .WithOrigins(
-                                 "https://localhost:7092",                 // Local Blazor
+                                 "https://localhost:7092",
                                  "http://localhost:7092",
-                                 "https://dowhatta.azurewebsites.net"      // Azure Blazor App
+                                 "https://dowhatta.azurewebsites.net",
+                                 "https://newdoor-simulator.azurewebsites.net"
                              )
                              .AllowAnyHeader()
                              .AllowAnyMethod()
-                             .AllowCredentials(); // only if using auth cookies / tokens
+                             .AllowCredentials();
                     });
             });
 
             builder.WebHost.AddApplicationConfiguration<ApplicationSettings>();            
             builder.Services.AddPlatformServices(builder.Configuration);
-           
-                      
+
+            // Add Kafka Producer
+            builder.Services.AddKafkaProducer(config =>
+            {
+                config.BootstrapServers = builder.Configuration["Kafka:BootstrapServers"] ?? "pkc-619z3.us-east1.gcp.confluent.cloud:9092";
+                config.Username = builder.Configuration["Kafka:Username"] ?? "";
+                config.Password = builder.Configuration["Kafka:Password"] ?? "";
+            });
+
+            // Add Device Enrichment Service
+            builder.Services.AddHttpClient();
+            builder.Services.AddSingleton<IDeviceEnrichmentService, DeviceEnrichmentService>();
 
             var app = builder.Build();
 
-           
             app.UseCors("AllowBlazorClient");
             app.ConfigureApplication();
-            // yet to implement NotificationHub 
 
             app.Run();
         }
     }
 }
+

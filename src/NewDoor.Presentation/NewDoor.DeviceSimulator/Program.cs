@@ -6,6 +6,8 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
+builder.Services.AddHttpClient();
+
 builder.Services.AddHttpClient<ApiClientService>(client =>
 {
     var baseUrl = builder.Configuration["Api:BaseUrl"] ?? "https://newdoor-api.azurewebsites.net";
@@ -15,6 +17,7 @@ builder.Services.AddHttpClient<ApiClientService>(client =>
 builder.Services.AddSingleton<DeviceService>();
 builder.Services.AddSingleton<EventBufferService>();
 builder.Services.AddSingleton<FakeTelemetryGeneratorService>();
+builder.Services.AddSingleton<KafkaProducerService>();
 builder.Services.AddSingleton<SimulationEngineService>();
 
 var app = builder.Build();

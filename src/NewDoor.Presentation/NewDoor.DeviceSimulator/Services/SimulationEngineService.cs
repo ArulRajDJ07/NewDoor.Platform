@@ -9,6 +9,7 @@ public class SimulationEngineService
     private readonly DeviceService _deviceService;
     private readonly FakeTelemetryGeneratorService _telemetryGenerator;
     private readonly EventBufferService _eventBuffer;
+    private readonly KafkaProducerService _kafkaProducer;
     private readonly ILogger<SimulationEngineService> _logger;
 
     private CancellationTokenSource? _cancellationTokenSource;
@@ -29,11 +30,13 @@ public class SimulationEngineService
         DeviceService deviceService,
         FakeTelemetryGeneratorService telemetryGenerator,
         EventBufferService eventBuffer,
+        KafkaProducerService kafkaProducer,
         ILogger<SimulationEngineService> logger)
     {
         _deviceService = deviceService;
         _telemetryGenerator = telemetryGenerator;
         _eventBuffer = eventBuffer;
+        _kafkaProducer = kafkaProducer;
         _logger = logger;
     }
 
@@ -97,7 +100,9 @@ public class SimulationEngineService
             return;
         }
 
-        var telemetry = _telemetryGenerator.GenerateTelemetry(device, building, eventType);
+        var payload = _telemetryGenerator.GenerateTelemetry(device, building, eventType);
+
+        await _kafkaProducer.PublishTelemetryAsync(payload);
 
         var eventLog = new EventLogModel
         {
@@ -105,15 +110,13 @@ public class SimulationEngineService
             BuildingName = building.Name,
             DeviceId = device.DeviceId,
             EventType = eventType,
-            Status = telemetry.Payload.Status
+            Status = payload.Status
         };
 
         _eventBuffer.AddEvent(eventLog);
         Interlocked.Increment(ref _eventsGenerated);
 
         _logger.LogInformation("Triggered {EventType} for device {DeviceId}", eventType, device.DeviceId);
-
-        await Task.CompletedTask;
     }
 
     public async Task TriggerPeakLoadAsync()
@@ -148,7 +151,6 @@ public class SimulationEngineService
             _logger.LogInformation("Starting simulation: {EventsPerSecond} events/sec for {Duration} seconds", 
                 settings.EventsPerSecond, settings.DurationSeconds);
 
-            // For high-frequency simulations (>100 events/sec), use batch approach
             if (settings.EventsPerSecond > 100)
             {
                 var batchSize = Math.Min(100, settings.EventsPerSecond / 10);
@@ -158,7 +160,8 @@ public class SimulationEngineService
                 {
                     for (int i = 0; i < batchSize && DateTime.UtcNow < endTime; i++)
                     {
-                        GenerateEvent(settings, ref eventsSinceLastCheck);
+                        await GenerateEventAsync(settings);
+                        eventsSinceLastCheck++;
                     }
 
                     var now = DateTime.UtcNow;
@@ -175,14 +178,14 @@ public class SimulationEngineService
             }
             else
             {
-                // For lower frequency, use precise timing
                 var intervalMs = 1000.0 / settings.EventsPerSecond;
                 using var timer = new PeriodicTimer(TimeSpan.FromMilliseconds(intervalMs));
 
                 while (DateTime.UtcNow < endTime && !cancellationToken.IsCancellationRequested)
                 {
                     await timer.WaitForNextTickAsync(cancellationToken);
-                    GenerateEvent(settings, ref eventsSinceLastCheck);
+                    await GenerateEventAsync(settings);
+                    eventsSinceLastCheck++;
 
                     var now = DateTime.UtcNow;
                     if ((now - lastCheckTime).TotalSeconds >= 1.0)
@@ -214,7 +217,7 @@ public class SimulationEngineService
         }
     }
 
-    private void GenerateEvent(SimulationSettings settings, ref int eventsSinceLastCheck)
+    private async Task GenerateEventAsync(SimulationSettings settings)
     {
         var devices = settings.SelectedDeviceId.HasValue
             ? new List<DeviceResponse?> { _deviceService.GetDevice(settings.SelectedDeviceId.Value) }
@@ -242,35 +245,43 @@ public class SimulationEngineService
             return;
         }
 
-        // For Burst mode, generate a mix of normal events and alerts
         string? eventType = null;
         if (settings.TrafficMode == TrafficMode.Burst)
         {
-            // 40% chance of alert events in Burst mode
             var randomValue = Random.Shared.Next(100);
             if (randomValue < 40)
             {
-                // Generate alert events
                 var alertTypes = new[] { "SmokeDetected", "HeatSpike", "DeviceOffline", "LowBattery" };
                 eventType = alertTypes[Random.Shared.Next(alertTypes.Length)];
             }
         }
 
-        var telemetry = eventType != null 
+        var payload = eventType != null 
             ? _telemetryGenerator.GenerateTelemetry(device, building, eventType)
             : _telemetryGenerator.GenerateTelemetry(device, building);
+
+        _ = Task.Run(async () => 
+        {
+            try 
+            { 
+                await _kafkaProducer.PublishTelemetryAsync(payload); 
+            } 
+            catch (Exception ex) 
+            { 
+                _logger.LogError(ex, "Failed to publish to Gateway"); 
+            }
+        });
 
         var eventLog = new EventLogModel
         {
             Timestamp = DateTime.Now,
             BuildingName = building.Name,
             DeviceId = device.DeviceId,
-            EventType = eventType ?? telemetry.EventType,
-            Status = telemetry.Payload.Status
+            EventType = eventType ?? payload.EventType,
+            Status = payload.Status
         };
 
         _eventBuffer.AddEvent(eventLog);
         Interlocked.Increment(ref _eventsGenerated);
-        eventsSinceLastCheck++;
     }
 }

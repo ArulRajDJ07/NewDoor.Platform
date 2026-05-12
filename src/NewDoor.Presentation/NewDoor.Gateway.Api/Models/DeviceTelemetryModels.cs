@@ -1,10 +1,10 @@
-namespace NewDoor.DeviceSimulator.Models;
+namespace NewDoor.Gateway.Api.Models;
 
-public class DeviceTelemetryPayload
+public class DeviceTelemetryRequest
 {
     public string DeviceId { get; set; } = string.Empty;
     public string EventType { get; set; } = string.Empty;
-    public DateTime TimestampUtc { get; set; } = DateTime.UtcNow;
+    public DateTime TimestampUtc { get; set; }
     public string Status { get; set; } = string.Empty;
     public int BatteryLevel { get; set; }
     public double? Temperature { get; set; }
@@ -25,7 +25,7 @@ public class EnrichedTelemetryEvent
     public string BuildingCode { get; set; } = string.Empty;
     public string Floor { get; set; } = string.Empty;
     public string Zone { get; set; } = string.Empty;
-    public DateTime TimestampUtc { get; set; } = DateTime.UtcNow;
+    public DateTime TimestampUtc { get; set; }
     public TelemetryPayload Payload { get; set; } = new();
     public TelemetryMetadata Metadata { get; set; } = new();
 }
@@ -41,6 +41,6 @@ public class TelemetryPayload
 
 public class TelemetryMetadata
 {
-    public string Source { get; set; } = "NewDoor.DeviceSimulator";
+    public string Source { get; set; } = "NewDoor.Gateway.Api";
     public DateTime GeneratedUtc { get; set; } = DateTime.UtcNow;
 }
