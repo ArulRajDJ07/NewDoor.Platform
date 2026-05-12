@@ -1,19 +1,10 @@
 ﻿@inherits LayoutComponentBase
 
-<div class="page">
-    <div class="sidebar">
-        <NavMenu />
+<div class="app-container">
+    <Sidebar />
+    <div class="main-content-wrapper">
+        @Body
     </div>
-
-    <main>
-        <div class="top-row px-4">
-            <a href="https://learn.microsoft.com/aspnet/core/" target="_blank">About</a>
-        </div>
-
-        <article class="content px-4">
-            @Body
-        </article>
-    </main>
 </div>
 
 <div id="blazor-error-ui" data-nosnippet>
@@ -21,3 +12,50 @@
     <a href="." class="reload">Reload</a>
     <span class="dismiss">🗙</span>
 </div>
+
+<style>
+    .app-container {
+        width: 100vw;
+        height: 100vh;
+        display: flex;
+        overflow: hidden;
+        background: #1a1d29;
+    }
+
+    .main-content-wrapper {
+        flex: 1;
+        margin-left: 250px;
+        height: 100vh;
+        overflow: hidden;
+        background: #f5f5f5;
+    }
+
+    #blazor-error-ui {
+        background: #dc3545;
+        padding: 1rem 1rem 1rem 3.7rem;
+        color: white;
+        border-radius: 4px;
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        z-index: 9999;
+        display: none;
+    }
+
+    #blazor-error-ui .reload {
+        color: white;
+        text-decoration: underline;
+        margin-left: 10px;
+    }
+
+    .dismiss {
+        cursor: pointer;
+        margin-left: 10px;
+    }
+
+    @@media (max-width: 640.98px) {
+        .main-content-wrapper {
+            margin-left: 0;
+        }
+    }
+</style>

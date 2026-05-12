@@ -1,0 +1,145 @@
+@using NewDoor.DeviceSimulator.Services
+@inject DeviceService DeviceService
+@inject SimulationEngineService SimulationEngine
+@implements IDisposable
+
+<div class="header-bar">
+    <div class="header-left">
+        <h1 class="header-title">Device Simulator</h1>
+    </div>
+
+    <div class="header-right">
+        <div class="header-status">
+            <span class="status-dot connected"></span>
+            <span class="status-label">Kafka:</span>
+            <span class="status-value connected">Connected</span>
+        </div>
+        <div class="header-status">
+            <span class="status-label">Simulation:</span>
+            <span class="status-value @(SimulationEngine.IsRunning ? "running" : "stopped")">
+                @(SimulationEngine.IsRunning ? "Running" : "Stopped")
+            </span>
+        </div>
+        <div class="header-status">
+            <span class="status-label">Devices:</span>
+            <span class="status-value">@DeviceService.Devices.Count</span>
+        </div>
+        <div class="header-badge">LIVE</div>
+        <div class="header-time">
+            @DateTime.Now.ToString("hh:mm:ss tt")
+        </div>
+    </div>
+</div>
+
+@code {
+    private System.Threading.Timer? _timer;
+
+    protected override void OnInitialized()
+    {
+        SimulationEngine.OnSimulationStateChanged += StateHasChanged;
+        _timer = new System.Threading.Timer(_ => InvokeAsync(StateHasChanged), null, 0, 1000);
+    }
+
+    public void Dispose()
+    {
+        SimulationEngine.OnSimulationStateChanged -= StateHasChanged;
+        _timer?.Dispose();
+    }
+}
+
+<style>
+    .header-bar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 8px 15px;
+        background: #1a1d29;
+        border-bottom: 1px solid #2d3142;
+        height: 46px;
+        flex-shrink: 0;
+    }
+
+    .header-left {
+        display: flex;
+        align-items: baseline;
+        gap: 12px;
+    }
+
+    .header-title {
+        font-size: 16px;
+        font-weight: 700;
+        color: #ffffff;
+        margin: 0;
+        letter-spacing: 0.5px;
+    }
+
+    .header-subtitle {
+        font-size: 13px;
+        color: #9ca3af;
+        font-weight: 400;
+    }
+
+    .header-right {
+        display: flex;
+        gap: 18px;
+        align-items: center;
+    }
+
+    .header-status {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+    }
+
+    .status-dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+    }
+
+    .status-dot.connected {
+        background: #10b981;
+    }
+
+    .status-label {
+        font-size: 12px;
+        color: #9ca3af;
+        font-weight: 400;
+    }
+
+    .status-value {
+        font-size: 12px;
+        font-weight: 500;
+        color: #ffffff;
+    }
+
+    .status-value.connected {
+        color: #10b981;
+    }
+
+    .status-value.running {
+        color: #10b981;
+    }
+
+    .status-value.stopped {
+        color: #9ca3af;
+    }
+
+    .header-badge {
+        padding: 3px 10px;
+        border-radius: 3px;
+        font-size: 10px;
+        font-weight: 700;
+        background: #10b981;
+        color: #ffffff;
+        letter-spacing: 0.4px;
+    }
+
+    .header-time {
+        font-size: 12px;
+        color: #ffffff;
+        font-weight: 500;
+        min-width: 90px;
+        text-align: right;
+    }
+</style>

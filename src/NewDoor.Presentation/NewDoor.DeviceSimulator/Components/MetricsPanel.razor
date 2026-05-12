@@ -1,0 +1,144 @@
+@using NewDoor.DeviceSimulator.Services
+@inject DeviceService DeviceService
+@inject SimulationEngineService SimulationEngine
+@inject EventBufferService EventBuffer
+@implements IDisposable
+
+<div class="metrics-panel">
+    <div class="metric-card">
+        <div class="metric-icon" style="background: #3b82f6;">
+            <i class="fas fa-building"></i>
+        </div>
+        <div class="metric-content">
+            <div class="metric-label">BUILDINGS</div>
+            <div class="metric-value">@DeviceService.Buildings.Count</div>
+            <div class="metric-sublabel">Total Buildings</div>
+        </div>
+    </div>
+
+    <div class="metric-card">
+        <div class="metric-icon" style="background: #10b981;">
+            <i class="fas fa-microchip"></i>
+        </div>
+        <div class="metric-content">
+            <div class="metric-label">DEVICES</div>
+            <div class="metric-value">@DeviceService.Devices.Count</div>
+            <div class="metric-sublabel">Total Devices</div>
+        </div>
+    </div>
+
+    <div class="metric-card">
+        <div class="metric-icon" style="background: #ef4444;">
+            <i class="fas fa-bell"></i>
+        </div>
+        <div class="metric-content">
+            <div class="metric-label">ALERTS</div>
+            <div class="metric-value">@DeviceService.Buildings.Sum(b => b.ActiveAlarms)</div>
+            <div class="metric-sublabel">Active Alerts</div>
+        </div>
+    </div>
+
+    <div class="metric-card">
+        <div class="metric-icon" style="background: #f59e0b;">
+            <i class="fas fa-wifi"></i>
+        </div>
+        <div class="metric-content">
+            <div class="metric-label">OFFLINE</div>
+            <div class="metric-value">@DeviceService.Devices.Count(d => d.Status.ToLower() == "offline")</div>
+            <div class="metric-sublabel">Offline Devices</div>
+        </div>
+    </div>
+
+    <div class="metric-card">
+        <div class="metric-icon" style="background: #8b5cf6;">
+            <i class="fas fa-stream"></i>
+        </div>
+        <div class="metric-content">
+            <div class="metric-label">EVENTS</div>
+            <div class="metric-value">@SimulationEngine.EventsGenerated.ToString("N0")</div>
+            <div class="metric-sublabel">Total Streamed</div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private System.Threading.Timer? _timer;
+
+    protected override void OnInitialized()
+    {
+        DeviceService.OnDataLoaded += StateHasChanged;
+        SimulationEngine.OnMetricsUpdated += StateHasChanged;
+        _timer = new System.Threading.Timer(_ => InvokeAsync(StateHasChanged), null, 0, 500);
+    }
+
+    public void Dispose()
+    {
+        DeviceService.OnDataLoaded -= StateHasChanged;
+        SimulationEngine.OnMetricsUpdated -= StateHasChanged;
+        _timer?.Dispose();
+    }
+}
+
+<style>
+    .metrics-panel {
+        display: flex;
+        gap: 10px;
+        padding: 10px 15px;
+        background: #f5f5f5;
+    }
+
+    .metric-card {
+        flex: 1;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        background: #ffffff;
+        padding: 10px 12px;
+        border-radius: 6px;
+        border: 1px solid #e0e0e0;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+    }
+
+    .metric-icon {
+        width: 42px;
+        height: 42px;
+        border-radius: 6px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 18px;
+        color: white;
+        flex-shrink: 0;
+    }
+
+    .metric-icon i {
+        font-size: 20px;
+    }
+
+    .metric-content {
+        flex: 1;
+        min-width: 0;
+    }
+
+    .metric-label {
+        font-size: 9px;
+        font-weight: 700;
+        color: #333333;
+        letter-spacing: 0.3px;
+        margin-bottom: 2px;
+    }
+
+    .metric-value {
+        font-size: 22px;
+        font-weight: 700;
+        color: #333333;
+        line-height: 1;
+    }
+
+    .metric-sublabel {
+        font-size: 10px;
+        color: #666666;
+        margin-top: 2px;
+        font-weight: 400;
+    }
+</style>
