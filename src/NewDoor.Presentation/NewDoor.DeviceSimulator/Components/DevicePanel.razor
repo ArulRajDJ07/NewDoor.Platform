@@ -1,0 +1,250 @@
+@using NewDoor.DeviceSimulator.Services
+@using NewDoor.Platform.DTO.Features.Buildings.Models
+@inject DeviceService DeviceService
+@implements IDisposable
+
+<div class="device-panel">
+    <h3 class="panel-title">DEVICES</h3>
+    
+    @if (!DeviceService.Buildings.Any())
+    {
+        <div class="empty-state">Loading buildings...</div>
+    }
+    else
+    {
+        @foreach (var building in DeviceService.Buildings)
+        {
+            <div class="building-card">
+                <div class="building-header" @onclick="() => ToggleBuilding(building.Id)">
+                    <i class="fas fa-building building-icon"></i>
+                    <div class="building-info">
+                        <div class="building-name">@building.Name</div>
+                        <div class="building-meta">
+                            <span class="meta-item">@building.Devices.Count Devices</span>
+                            <span class="meta-item online">Online: @building.OnlineDevices</span>
+                            @if (building.ActiveAlarms > 0)
+                            {
+                                <span class="meta-item alerts">Alerts: @building.ActiveAlarms</span>
+                            }
+                        </div>
+                    </div>
+                    <i class="fas @(expandedBuildings.Contains(building.Id) ? "fa-chevron-down" : "fa-chevron-right") expand-icon"></i>
+                </div>
+
+                @if (expandedBuildings.Contains(building.Id))
+                {
+                    <div class="devices-list">
+                        @foreach (var device in building.Devices)
+                        {
+                            <div class="device-item">
+                                <div class="device-status @device.Status.ToLower()"></div>
+                                <div class="device-info">
+                                    <div class="device-id">@device.DeviceId</div>
+                                    <div class="device-type">@device.DeviceType</div>
+                                </div>
+                                <div class="device-meta">
+                                    <span class="device-badge @device.Status.ToLower()">@device.Status</span>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+        }
+    }
+</div>
+
+@code {
+    private HashSet<int> expandedBuildings = new();
+
+    protected override void OnInitialized()
+    {
+        DeviceService.OnDataLoaded += StateHasChanged;
+    }
+
+    private void ToggleBuilding(int buildingId)
+    {
+        if (expandedBuildings.Contains(buildingId))
+            expandedBuildings.Remove(buildingId);
+        else
+            expandedBuildings.Add(buildingId);
+    }
+
+    public void Dispose()
+    {
+        DeviceService.OnDataLoaded -= StateHasChanged;
+    }
+}
+
+<style>
+    .device-panel {
+        background: #ffffff;
+        border-radius: 6px;
+        padding: 12px;
+        border: 1px solid #e0e0e0;
+        height: 100%;
+        overflow-y: auto;
+    }
+
+    .panel-title {
+        font-size: 14px;
+        font-weight: 700;
+        color: #0066cc;
+        margin: 0 0 10px 0;
+        letter-spacing: 0.3px;
+    }
+
+    .empty-state {
+        text-align: center;
+        padding: 30px;
+        color: #999999;
+        font-size: 13px;
+    }
+
+    .building-card {
+        background: #f9f9f9;
+        border-radius: 4px;
+        margin-bottom: 8px;
+        border: 1px solid #e0e0e0;
+        overflow: hidden;
+    }
+
+    .building-header {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 10px;
+        cursor: pointer;
+        transition: background 0.2s;
+    }
+
+    .building-header:hover {
+        background: #f0f0f0;
+    }
+
+    .building-icon {
+        font-size: 18px;
+        color: #666;
+    }
+
+    .building-info {
+        flex: 1;
+        min-width: 0;
+    }
+
+    .building-name {
+        font-size: 14px;
+        font-weight: 600;
+        color: #333333;
+        margin-bottom: 3px;
+    }
+
+    .building-meta {
+        display: flex;
+        gap: 8px;
+        font-size: 11px;
+    }
+
+    .meta-item {
+        color: #666666;
+    }
+
+    .meta-item.online {
+        color: #10b981;
+    }
+
+    .meta-item.alerts {
+        color: #f59e0b;
+    }
+
+    .expand-icon {
+        color: #999999;
+        font-size: 12px;
+    }
+
+    .devices-list {
+        background: #ffffff;
+        padding: 6px;
+    }
+
+    .device-item {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px;
+        background: #f9f9f9;
+        border-radius: 4px;
+        margin-bottom: 5px;
+        border: 1px solid #e0e0e0;
+    }
+
+    .device-status {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        flex-shrink: 0;
+    }
+
+    .device-status.online {
+        background: #10b981;
+    }
+
+    .device-status.offline {
+        background: #999999;
+    }
+
+    .device-info {
+        flex: 1;
+        min-width: 0;
+    }
+
+    .device-id {
+        font-size: 12px;
+        font-weight: 600;
+        color: #333333;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .device-type {
+        font-size: 11px;
+        color: #666666;
+    }
+
+    .device-badge {
+        padding: 3px 8px;
+        border-radius: 3px;
+        font-size: 9px;
+        font-weight: 600;
+        text-transform: uppercase;
+        flex-shrink: 0;
+    }
+
+    .device-badge.online {
+        background: #d1fae5;
+        color: #065f46;
+    }
+
+    .device-badge.offline {
+        background: #f3f4f6;
+        color: #6b7280;
+    }
+
+    .device-panel::-webkit-scrollbar {
+        width: 6px;
+    }
+
+    .device-panel::-webkit-scrollbar-track {
+        background: #f5f5f5;
+    }
+
+    .device-panel::-webkit-scrollbar-thumb {
+        background: #cccccc;
+        border-radius: 3px;
+    }
+
+    .device-panel::-webkit-scrollbar-thumb:hover {
+        background: #999999;
+    }
+</style>

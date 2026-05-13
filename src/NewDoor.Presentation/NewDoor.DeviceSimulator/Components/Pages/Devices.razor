@@ -1,0 +1,80 @@
+@page "/devices"
+@rendermode InteractiveServer
+
+<PageTitle>Devices - NEWDOOR</PageTitle>
+
+<div class="page-container">
+    <div class="content-area">
+        <div class="page-header">
+            <h2>Devices Management</h2>
+            <p>Manage and monitor all devices across buildings</p>
+        </div>
+        
+        <div class="coming-soon">
+            <div class="icon">📡</div>
+            <h3>Coming Soon</h3>
+            <p>Devices management feature is under development</p>
+        </div>
+    </div>
+</div>
+
+<style>
+    .page-container {
+        display: flex;
+        flex-direction: column;
+        height: 100vh;
+        background: #f5f5f5;
+        color: #333333;
+    }
+
+    .content-area {
+        flex: 1;
+        padding: 30px;
+        overflow-y: auto;
+    }
+
+    .page-header {
+        margin-bottom: 30px;
+    }
+
+    .page-header h2 {
+        font-size: 24px;
+        font-weight: 700;
+        color: #0066cc;
+        margin-bottom: 8px;
+    }
+
+    .page-header p {
+        font-size: 14px;
+        color: #666666;
+    }
+
+    .coming-soon {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        min-height: 400px;
+        background: #ffffff;
+        border-radius: 8px;
+        border: 1px solid #e0e0e0;
+    }
+
+    .coming-soon .icon {
+        font-size: 64px;
+        margin-bottom: 20px;
+        opacity: 0.5;
+    }
+
+    .coming-soon h3 {
+        font-size: 28px;
+        font-weight: 700;
+        color: #333333;
+        margin-bottom: 12px;
+    }
+
+    .coming-soon p {
+        font-size: 16px;
+        color: #666666;
+    }
+</style>

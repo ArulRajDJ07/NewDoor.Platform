@@ -1,12 +1,6 @@
-using DoWhatta.Platform.Builder;
-using DoWhatta.Platform.Builder.Output;
-using DoWhatta.Platform.Builder.Output.Writers;
-using DoWhatta.Platform.Core.Common;
-using DoWhatta.Platform.Core.Settings;
-using DoWhatta.Platform.Data.Extensions;
-using DoWhatta.Platform.Infrastructure.HttpClients;
-using DoWhatta.Platform.Infrastructure.Messaging.ServiceBus;
-using NewDoor.Gateway.Api.Settings;
+using NewDoor.Gateway.Api.Services;
+using NewDoor.EventBus;
+using Serilog;
 
 namespace NewDoor.Gateway.Api
 {
@@ -14,39 +8,101 @@ namespace NewDoor.Gateway.Api
     {
         public static void Main(string[] args)
         {
-            var builder = WebApplication.CreateBuilder(args);
-
-            // Add CORS policy
-            builder.Services.AddCors(options =>
+            try
             {
-                options.AddPolicy("AllowBlazorClient",
-                    policy =>
+                var builder = WebApplication.CreateBuilder(args);
+
+                // Configure Serilog
+                Log.Logger = new LoggerConfiguration()
+                    .ReadFrom.Configuration(builder.Configuration)
+                    .Enrich.FromLogContext()
+                    .WriteTo.Console()
+                    .CreateLogger();
+
+                builder.Host.UseSerilog();
+
+                // Configure CORS for Blazor clients
+                builder.Services.AddCors(options =>
+                {
+                    options.AddPolicy("AllowBlazorClient",
+                        policy =>
+                        {
+                            policy
+                                 .WithOrigins(
+                                     "https://localhost:7092",
+                                     "http://localhost:7092",
+                                     "https://dowhatta.azurewebsites.net",
+                                     "https://newdoor-simulator.azurewebsites.net"
+                                 )
+                                 .AllowAnyHeader()
+                                 .AllowAnyMethod()
+                                 .AllowCredentials();
+                        });
+                });
+
+                // Configure API controllers and Swagger
+                builder.Services.AddControllers();
+                builder.Services.AddEndpointsApiExplorer();
+                builder.Services.AddSwaggerGen(c =>
+                {
+                    c.SwaggerDoc("v1", new Microsoft.OpenApi.Models.OpenApiInfo
                     {
-                        policy
-                             .WithOrigins(
-                                 "https://localhost:7092",                 // Local Blazor
-                                 "http://localhost:7092",
-                                 "https://dowhatta.azurewebsites.net"      // Azure Blazor App
-                             )
-                             .AllowAnyHeader()
-                             .AllowAnyMethod()
-                             .AllowCredentials(); // only if using auth cookies / tokens
+                        Title = "NewDoor Gateway API",
+                        Version = "v1",
+                        Description = "IoT Device Telemetry Ingestion API - Kafka Integration"
                     });
-            });
+                });
 
-            builder.WebHost.AddApplicationConfiguration<ApplicationSettings>();            
-            builder.Services.AddPlatformServices(builder.Configuration);
-           
-                      
+                // Register Event Bus Producer (Kafka/ServiceBus) - automatically selects based on appsettings.json
+                builder.Services.AddEventBusProducer(builder.Configuration);
 
-            var app = builder.Build();
+                // Add Device Enrichment Service
+                builder.Services.AddSingleton<IDeviceEnrichmentService, DeviceEnrichmentService>();
 
-           
-            app.UseCors("AllowBlazorClient");
-            app.ConfigureApplication();
-            // yet to implement NotificationHub 
+                var app = builder.Build();
 
-            app.Run();
+                // Enable Swagger
+                app.UseSwagger();
+                app.UseSwaggerUI(c =>
+                {
+                    c.SwaggerEndpoint("/swagger/v1/swagger.json", "NewDoor Gateway API v1");
+                    c.RoutePrefix = "swagger";
+                    c.DocumentTitle = "NewDoor Gateway API Documentation";
+                });
+
+                // Configure middleware pipeline
+                app.UseCors("AllowBlazorClient");
+                app.UseHttpsRedirection();
+                app.UseAuthorization();
+                app.MapControllers();
+
+                // Health check endpoint
+                app.MapGet("/health", () => new { status = "healthy", service = "NewDoor.Gateway.Api", timestamp = DateTime.UtcNow })
+                   .WithTags("Health")
+                   .WithName("GetHealth")
+                   .Produces(200);
+
+                // Root endpoint - redirect to Swagger
+                app.MapGet("/", (HttpContext context) => 
+                {
+                    context.Response.Redirect("/swagger");
+                    return Task.CompletedTask;
+                })
+                .ExcludeFromDescription();
+
+                Log.Information("NewDoor Gateway API starting...");
+
+                app.Run();
+            }
+            catch (Exception ex)
+            {
+                Log.Fatal(ex, "Application startup failed");
+                throw;
+            }
+            finally
+            {
+                Log.CloseAndFlush();
+            }
         }
     }
 }

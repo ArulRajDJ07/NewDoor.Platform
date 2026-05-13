@@ -4,6 +4,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- Kafka -->
+    <PackageVersion Include="Confluent.Kafka" Version="2.6.1" />
+    <PackageVersion Include="librdkafka.redist" Version="2.6.1" />
+
     <!-- Azure Services -->
     <PackageVersion Include="Azure.Messaging.ServiceBus" Version="7.18.4" />
     <PackageVersion Include="Azure.Security.KeyVault.Secrets" Version="4.7.0" />

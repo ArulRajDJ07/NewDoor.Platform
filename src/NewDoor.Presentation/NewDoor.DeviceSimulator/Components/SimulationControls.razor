@@ -1,0 +1,378 @@
+@using NewDoor.DeviceSimulator.Services
+@using NewDoor.DeviceSimulator.Models
+@inject DeviceService DeviceService
+@inject SimulationEngineService SimulationEngine
+@implements IDisposable
+
+<div class="simulation-controls">
+    <h3 class="panel-title">SIMULATION CONTROLS</h3>
+
+    <div class="control-group">
+        <label class="control-label">Building</label>
+        <select class="control-select" @bind="settings.SelectedBuildingId" @bind:after="OnBuildingChanged">
+            <option value="">All Buildings</option>
+            @foreach (var building in DeviceService.Buildings)
+            {
+                <option value="@building.Id">@building.Name</option>
+            }
+        </select>
+    </div>
+
+    <div class="control-group">
+        <label class="control-label">Device</label>
+        <select class="control-select" @bind="settings.SelectedDeviceId" disabled="@(!settings.SelectedBuildingId.HasValue)">
+            <option value="">All Devices</option>
+            @if (settings.SelectedBuildingId.HasValue)
+            {
+                @foreach (var device in DeviceService.GetDevicesByBuilding(settings.SelectedBuildingId.Value))
+                {
+                    <option value="@device.Id">@device.DeviceId - @device.DeviceName</option>
+                }
+            }
+        </select>
+    </div>
+
+    <div class="controls-grid">
+        <div class="control-group">
+            <label class="control-label">Traffic Mode</label>
+            <select class="control-select" @bind="settings.TrafficMode" @bind:after="OnTrafficModeChanged">
+                <option value="@TrafficMode.Normal">Normal (10 events/sec)</option>
+                <option value="@TrafficMode.Burst">Burst (100 events/sec)</option>
+                <option value="@TrafficMode.Heavy">Heavy (1000 events/sec)</option>
+                <option value="@TrafficMode.Extreme">Extreme (10000 events/sec)</option>
+                <option value="@TrafficMode.PeakLoad">Peak Load (50000 events/sec)</option>
+            </select>
+        </div>
+
+        <div class="control-group">
+            <label class="control-label">Duration (Seconds)</label>
+            <select class="control-select" @bind="settings.DurationSeconds">
+                <option value="3">3 seconds</option>
+                <option value="10">10 seconds</option>
+                <option value="20">20 seconds</option>
+                <option value="30">30 seconds</option>
+                <option value="60">1 minute</option>
+                <option value="300">5 minutes</option>
+                <option value="600">10 minutes</option>
+                <option value="1800">30 minutes</option>
+            </select>
+        </div>
+    </div>
+
+    <div class="button-group">
+        @if (!SimulationEngine.IsRunning)
+        {
+            <button class="btn btn-start" @onclick="StartSimulation"><i class="fas fa-play"></i> Start</button>
+        }
+        else
+        {
+            <button class="btn btn-stop" @onclick="StopSimulation"><i class="fas fa-stop"></i> Stop</button>
+        }
+    </div>
+
+    <div class="trigger-section">
+        <h4 class="section-title">Trigger Events</h4>
+
+        @if (!string.IsNullOrEmpty(confirmationMessage))
+        {
+            <div class="confirmation-message">@confirmationMessage</div>
+        }
+
+        <div class="trigger-buttons">
+            <button class="btn-trigger btn-smoke" @onclick="TriggerSmokeEvent" disabled="@(!CanTrigger)">
+                <i class="fas fa-cloud"></i>
+                <span>Smoke</span>
+            </button>
+            <button class="btn-trigger btn-heat" @onclick="TriggerHeatEvent" disabled="@(!CanTrigger)">
+                <i class="fas fa-fire"></i>
+                <span>Heat</span>
+            </button>
+            <button class="btn-trigger btn-offline" @onclick="TriggerOfflineEvent" disabled="@(!CanTrigger)">
+                <i class="fas fa-wifi-slash"></i>
+                <span>Offline</span>
+            </button>
+            <button class="btn-trigger btn-peakload" @onclick="TriggerPeakLoad" disabled="@SimulationEngine.IsRunning">
+                <i class="fas fa-bolt"></i>
+                <span>Peak Load</span>
+            </button>
+        </div>
+    </div>
+</div>
+
+@code {
+    private SimulationSettings settings = new() 
+    { 
+        DurationSeconds = 60,
+        TrafficMode = TrafficMode.Normal,
+        EventsPerSecond = 10
+    };
+
+    private string confirmationMessage = string.Empty;
+    private System.Threading.Timer? _messageTimer;
+
+    private bool CanTrigger => settings.SelectedDeviceId.HasValue;
+
+    protected override void OnInitialized()
+    {
+        SimulationEngine.OnSimulationStateChanged += StateHasChanged;
+    }
+
+    private void OnBuildingChanged()
+    {
+        settings.SelectedDeviceId = null;
+    }
+
+    private void OnTrafficModeChanged()
+    {
+        settings.EventsPerSecond = settings.TrafficMode switch
+        {
+            TrafficMode.Normal => 10,
+            TrafficMode.Burst => 100,
+            TrafficMode.Heavy => 1000,
+            TrafficMode.Extreme => 10000,
+            TrafficMode.PeakLoad => 50000,
+            _ => 10
+        };
+    }
+
+    private async Task StartSimulation()
+    {
+        await SimulationEngine.StartSimulationAsync(settings);
+    }
+
+    private async Task StopSimulation()
+    {
+        await SimulationEngine.StopSimulationAsync();
+    }
+
+    private async Task TriggerPeakLoad()
+    {
+        ShowConfirmation("Peak Load triggered - 50K events/sec for 60 seconds");
+        await SimulationEngine.TriggerPeakLoadAsync();
+    }
+
+    private async Task TriggerSmokeEvent()
+    {
+        ShowConfirmation("Smoke Detected event triggered");
+        await TriggerEvent("SmokeDetected");
+    }
+
+    private async Task TriggerHeatEvent()
+    {
+        ShowConfirmation("Heat Spike event triggered");
+        await TriggerEvent("HeatSpike");
+    }
+
+    private async Task TriggerOfflineEvent()
+    {
+        ShowConfirmation("Device Offline event triggered");
+        await TriggerEvent("DeviceOffline");
+    }
+
+    private async Task TriggerEvent(string eventType)
+    {
+        if (settings.SelectedDeviceId.HasValue)
+        {
+            await SimulationEngine.TriggerEventAsync(settings.SelectedDeviceId.Value, eventType);
+        }
+    }
+
+    private void ShowConfirmation(string message)
+    {
+        confirmationMessage = message;
+        StateHasChanged();
+
+        _messageTimer?.Dispose();
+        _messageTimer = new System.Threading.Timer(_ =>
+        {
+            confirmationMessage = string.Empty;
+            InvokeAsync(StateHasChanged);
+        }, null, 3000, Timeout.Infinite);
+    }
+
+    public void Dispose()
+    {
+        SimulationEngine.OnSimulationStateChanged -= StateHasChanged;
+        _messageTimer?.Dispose();
+    }
+}
+
+<style>
+    .simulation-controls {
+        background: #ffffff;
+        border-radius: 6px;
+        padding: 12px;
+        border: 1px solid #e0e0e0;
+        flex-shrink: 0;
+    }
+
+    .panel-title {
+        font-size: 14px;
+        font-weight: 700;
+        color: #0066cc;
+        margin: 0 0 10px 0;
+        letter-spacing: 0.3px;
+    }
+
+    .control-group {
+        margin-bottom: 10px;
+    }
+
+    .control-label {
+        display: block;
+        font-size: 11px;
+        font-weight: 600;
+        color: #333333;
+        margin-bottom: 4px;
+    }
+
+    .control-select {
+        width: 100%;
+        padding: 6px 8px;
+        background: #ffffff;
+        border: 1px solid #cccccc;
+        border-radius: 4px;
+        color: #333333;
+        font-size: 12px;
+        cursor: pointer;
+    }
+
+    .control-select:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+        background: #f5f5f5;
+    }
+
+    .control-slider {
+        width: 100%;
+        height: 5px;
+        background: #e0e0e0;
+        border-radius: 3px;
+        outline: none;
+    }
+
+    .button-group {
+        margin: 12px 0;
+    }
+
+    .btn {
+        width: 100%;
+        padding: 8px;
+        border: none;
+        border-radius: 4px;
+        font-size: 13px;
+        font-weight: 600;
+        cursor: pointer;
+    }
+
+    .btn-start {
+        background: #10b981;
+        color: white;
+    }
+
+    .btn-start:hover {
+        background: #059669;
+    }
+
+    .btn-stop {
+        background: #dc3545;
+        color: white;
+    }
+
+    .btn-stop:hover {
+        background: #c82333;
+    }
+
+    .trigger-section {
+        margin-top: 12px;
+        padding-top: 12px;
+        border-top: 1px solid #e0e0e0;
+    }
+
+    .section-title {
+        font-size: 11px;
+        font-weight: 600;
+        color: #333333;
+        margin: 0 0 6px 0;
+    }
+
+    .trigger-buttons {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 8px;
+    }
+
+    .controls-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 10px;
+        margin-bottom: 10px;
+    }
+
+    .controls-grid .control-group {
+        margin-bottom: 0;
+    }
+
+    .btn-trigger {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 3px;
+        padding: 8px 6px;
+        border: none;
+        border-radius: 4px;
+        font-size: 11px;
+        font-weight: 600;
+        cursor: pointer;
+        color: white;
+        min-height: 65px;
+    }
+
+    .btn-trigger i {
+        font-size: 18px;
+        margin-bottom: 3px;
+    }
+
+    .btn-trigger span {
+        white-space: nowrap;
+        font-size: 11px;
+    }
+
+    .btn-trigger:disabled {
+        opacity: 0.3;
+        cursor: not-allowed;
+    }
+
+    .btn-smoke {
+        background: #f59e0b;
+    }
+
+    .btn-smoke:not(:disabled):hover {
+        background: #d97706;
+    }
+
+    .btn-heat {
+        background: #dc3545;
+    }
+
+    .btn-heat:not(:disabled):hover {
+        background: #c82333;
+    }
+
+    .btn-offline {
+        background: #6b7280;
+    }
+
+    .btn-offline:not(:disabled):hover {
+        background: #4b5563;
+    }
+
+    .btn-peakload {
+        background: #7c3aed;
+    }
+
+    .btn-peakload:not(:disabled):hover {
+        background: #6d28d9;
+    }
+</style>

@@ -1,0 +1,92 @@
+@page "/"
+@rendermode InteractiveServer
+@using NewDoor.DeviceSimulator.Services
+@using NewDoor.DeviceSimulator.Models
+@inject DeviceService DeviceService
+@inject SimulationEngineService SimulationEngine
+@inject EventBufferService EventBuffer
+
+<PageTitle>Device Simulator</PageTitle>
+
+<div class="dashboard-container">
+    <HeaderBar />
+
+    <div class="main-content">
+        <div class="metrics-row">
+            <MetricsPanel />
+        </div>
+
+        <div class="controls-row">
+            <div class="devices-section">
+                <DevicePanel />
+            </div>
+
+            <div class="simulator-section">
+                <SimulationControls />
+            </div>
+        </div>
+
+        <div class="stream-row">
+            <EventConsole />
+        </div>
+    </div>
+</div>
+
+@code {
+    protected override async Task OnInitializedAsync()
+    {
+        await DeviceService.LoadDataAsync();
+    }
+}
+
+<style>
+    .dashboard-container {
+        display: flex;
+        flex-direction: column;
+        height: 100vh;
+        background: #f5f5f5;
+        color: #333333;
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
+
+    .main-content {
+        display: flex;
+        flex-direction: column;
+        flex: 1;
+        overflow: hidden;
+        padding: 10px 15px;
+        gap: 10px;
+    }
+
+    /* Row 1: Metrics Cards */
+    .metrics-row {
+        flex-shrink: 0;
+    }
+
+    /* Row 2: Devices + Simulator Controls - Fixed Height */
+    .controls-row {
+        display: flex;
+        gap: 10px;
+        flex: 0 0 400px;
+        min-height: 400px;
+        max-height: 400px;
+    }
+
+    .devices-section {
+        flex: 0 0 340px;
+        overflow-y: auto;
+        overflow-x: hidden;
+    }
+
+    .simulator-section {
+        flex: 1;
+        overflow-y: auto;
+    }
+
+    /* Row 3: Live Event Stream - Takes Remaining Space */
+    .stream-row {
+        flex: 1;
+        min-height: 300px;
+        overflow: hidden;
+    }
+</style>
