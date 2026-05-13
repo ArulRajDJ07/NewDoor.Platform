@@ -1,5 +1,5 @@
 using NewDoor.Gateway.Api.Services;
-using NewDoor.EventBus.Extensions;
+using NewDoor.EventBus;
 using Serilog;
 
 namespace NewDoor.Gateway.Api
@@ -53,15 +53,8 @@ namespace NewDoor.Gateway.Api
                     });
                 });
 
-                // Configure Kafka Producer
-                builder.Services.AddKafkaProducer(config =>
-                {
-                    config.BootstrapServers = builder.Configuration["Kafka:BootstrapServers"] ?? "";
-                    config.Username = builder.Configuration["Kafka:Username"] ?? "";
-                    config.Password = builder.Configuration["Kafka:Password"] ?? "";
-                    config.MessageTimeoutMs = int.Parse(builder.Configuration["Kafka:MessageTimeoutMs"] ?? "300000");
-                    config.RequestTimeoutMs = int.Parse(builder.Configuration["Kafka:RequestTimeoutMs"] ?? "300000");
-                });
+                // Register Event Bus Producer (Kafka/ServiceBus) - automatically selects based on appsettings.json
+                builder.Services.AddEventBusProducer(builder.Configuration);
 
                 // Add Device Enrichment Service
                 builder.Services.AddSingleton<IDeviceEnrichmentService, DeviceEnrichmentService>();

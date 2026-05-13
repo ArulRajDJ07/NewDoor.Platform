@@ -1,3 +1,4 @@
+using NewDoor.EventBus;
 using NewDoor.EventBus.Consumers;
 using NewDoor.EventBus.Producers;
 using NewDoor.Listener.BackgroundServices;
@@ -61,47 +62,13 @@ namespace NewDoor.Listener
                     });
                 });
 
-                // Register Kafka services
-                builder.Services.AddSingleton<KafkaConsumerConfig>(sp =>
-                {
-                    var config = sp.GetRequiredService<IConfiguration>();
-                    return new KafkaConsumerConfig
-                    {
-                        BootstrapServers = config["Kafka:BootstrapServers"] ?? "localhost:9092",
-                        Username = config["Kafka:Username"] ?? "",
-                        Password = config["Kafka:Password"] ?? "",
-                        GroupId = config["Kafka:GroupId"] ?? "newdoor-listener-group"
-                    };
-                });
-
-                builder.Services.AddSingleton<KafkaProducerConfig>(sp =>
-                {
-                    var config = sp.GetRequiredService<IConfiguration>();
-                    return new KafkaProducerConfig
-                    {
-                        BootstrapServers = config["Kafka:BootstrapServers"] ?? "localhost:9092",
-                        Username = config["Kafka:Username"] ?? "",
-                        Password = config["Kafka:Password"] ?? "",
-                        MessageTimeoutMs = int.Parse(config["Kafka:MessageTimeoutMs"] ?? "30000"),
-                        RequestTimeoutMs = int.Parse(config["Kafka:RequestTimeoutMs"] ?? "30000")
-                    };
-                });
-
-                builder.Services.AddSingleton<IKafkaProducer, KafkaProducer>();
+                // Register business services
                 builder.Services.AddSingleton<IIncidentDetectionService, IncidentDetectionService>();
                 builder.Services.AddSingleton<IKafkaMessageHandler<EnrichedTelemetryEvent>, TelemetryMessageHandler>();
 
-                // Conditional Kafka Consumer registration based on architecture
-                // ARM64 Windows does not support librdkafka native library
-                if (System.Runtime.InteropServices.RuntimeInformation.ProcessArchitecture == System.Runtime.InteropServices.Architecture.Arm64)
-                {
-                    builder.Services.AddSingleton<IKafkaConsumer, MockKafkaConsumer<EnrichedTelemetryEvent>>();
-                    Log.Warning("Running on ARM64 architecture - Using MockKafkaConsumer for local development");
-                }
-                else
-                {
-                    builder.Services.AddSingleton<IKafkaConsumer, KafkaConsumer<EnrichedTelemetryEvent>>();
-                }
+                // Register Event Bus (Kafka/ServiceBus) - automatically selects based on appsettings.json
+                builder.Services.AddEventBusProducer(builder.Configuration);
+                builder.Services.AddEventBusConsumer<EnrichedTelemetryEvent>(builder.Configuration);
 
                 builder.Services.AddHostedService<TelemetryConsumerService>();
 
@@ -114,7 +81,7 @@ namespace NewDoor.Listener
                     app.UseSwaggerUI(c =>
                     {
                         c.SwaggerEndpoint("/swagger/v1/swagger.json", "NewDoor Listener API v1");
-                        c.RoutePrefix = string.Empty;
+                        c.RoutePrefix = "swagger"; // Access Swagger at /swagger
                     });
                 }
 

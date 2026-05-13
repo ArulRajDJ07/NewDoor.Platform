@@ -125,7 +125,7 @@ public class TestMessageController : ControllerBase
         {
             success = true,
             message = "Sample event generated and processed",
-            event = sampleEvent
+            eventData = sampleEvent
         });
     }
 
@@ -180,7 +180,7 @@ public class TestMessageController : ControllerBase
         {
             success = true,
             message = "Incident event generated and processed - check incident detection",
-            event = incidentEvent,
+            eventData = incidentEvent,
             warning = "High temperature/smoke levels - should trigger incident detection"
         });
     }
