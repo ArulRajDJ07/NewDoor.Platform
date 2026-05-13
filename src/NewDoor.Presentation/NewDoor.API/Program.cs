@@ -12,6 +12,13 @@ using NewDoor.API.Features.MetaModel.Mapper;
 using NewDoor.API.Features.User.Mapper;
 using NewDoor.API.Services;
 using NewDoor.API.Settings;
+using NewDoor.EventBus.Consumers;
+using NewDoor.EventBus.Producers;
+using NewDoor.API.Models;
+using NewDoor.API.Handlers;
+using NewDoor.API.Hubs;
+using NewDoor.API.BackgroundServices;
+using Serilog;
 using ApplicationSettings = NewDoor.API.Settings.ApplicationSettings;
 
 namespace NewDoor.API
@@ -20,63 +27,102 @@ namespace NewDoor.API
     {
         public static void Main(string[] args)
         {
-            var builder = WebApplication.CreateBuilder(args);
-
-            // Add CORS policy
-            builder.Services.AddCors(options =>
+            try
             {
-                options.AddPolicy("AllowBlazorClient",
-                    policy =>
+                var builder = WebApplication.CreateBuilder(args);
+
+                Log.Logger = new LoggerConfiguration()
+                    .ReadFrom.Configuration(builder.Configuration)
+                    .Enrich.FromLogContext()
+                    .WriteTo.Console()
+                    .CreateLogger();
+
+                builder.Host.UseSerilog();
+
+                builder.Services.AddCors(options =>
+                {
+                    options.AddPolicy("AllowBlazorClient",
+                        policy =>
+                        {
+                            policy
+                                 .WithOrigins(
+                                     "https://localhost:7092",
+                                     "http://localhost:7092",
+                                     "https://dowhatta.azurewebsites.net"
+                                 )
+                                 .AllowAnyHeader()
+                                 .AllowAnyMethod()
+                                 .AllowCredentials();
+                        });
+                });
+
+                builder.Services.AddSignalR();
+
+                builder.Services.AddSingleton<KafkaConsumerConfig>(sp =>
+                {
+                    var config = sp.GetRequiredService<IConfiguration>();
+                    return new KafkaConsumerConfig
                     {
-                        policy
-                             .WithOrigins(
-                                 "https://localhost:7092",                 // Local Blazor
-                                 "http://localhost:7092",
-                                 "https://dowhatta.azurewebsites.net"      // Azure Blazor App
-                             )
-                             .AllowAnyHeader()
-                             .AllowAnyMethod()
-                             .AllowCredentials(); // only if using auth cookies / tokens
-                    });
-            });
+                        BootstrapServers = config["Kafka:BootstrapServers"] ?? "localhost:9092",
+                        Username = config["Kafka:Username"] ?? "",
+                        Password = config["Kafka:Password"] ?? "",
+                        GroupId = config["Kafka:GroupId"] ?? "api-consumer-group"
+                    };
+                });
 
-            builder.WebHost.AddApplicationConfiguration<ApplicationSettings>();
+                builder.Services.AddSingleton<IKafkaMessageHandler<UIBroadcastEvent>, UIBroadcastMessageHandler>();
+                builder.Services.AddSingleton<IKafkaConsumer, KafkaConsumer<UIBroadcastEvent>>();
+                builder.Services.AddHostedService<UIBroadcastConsumerService>();
 
-            builder.Services
-                   .AddDoWhattaPlatformDatabase<DoWhattaDBContext>(builder.Configuration)
-                   .AddDoWhattaProductDatabase<DoWhattaProductDBContext>(builder.Configuration);
-            builder.Services.AddExternalServiceClient<InternalServiceSettings>(builder.Configuration);
-            builder.Services.AddAutoMapper(typeof(UserMapper));
-            builder.Services.AddAutoMapper(typeof(MetaModelMapper));
-            builder.Services.AddAutoMapper(typeof(EntityPropertyMetaModelMapper));
+                builder.WebHost.AddApplicationConfiguration<ApplicationSettings>();
 
-            builder.Services.AddScoped<EntityGenerator>();
-            builder.Services.AddScoped<CodeOutputOrchestrator>();
+                builder.Services
+                       .AddDoWhattaPlatformDatabase<DoWhattaDBContext>(builder.Configuration)
+                       .AddDoWhattaProductDatabase<DoWhattaProductDBContext>(builder.Configuration);
+                builder.Services.AddExternalServiceClient<InternalServiceSettings>(builder.Configuration);
+                builder.Services.AddAutoMapper(typeof(UserMapper));
+                builder.Services.AddAutoMapper(typeof(MetaModelMapper));
+                builder.Services.AddAutoMapper(typeof(EntityPropertyMetaModelMapper));
 
-            builder.Services.AddPlatformServices(builder.Configuration);
+                builder.Services.AddScoped<EntityGenerator>();
+                builder.Services.AddScoped<CodeOutputOrchestrator>();
 
-            var app = builder.Build();
+                builder.Services.AddPlatformServices(builder.Configuration);
 
-            using (var scope = app.Services.CreateScope())
-            {
-                var platformDb = scope.ServiceProvider.GetRequiredService<DoWhattaDBContext>();
-                if (!platformDb.Database.IsSqlite())
+                var app = builder.Build();
+
+                using (var scope = app.Services.CreateScope())
                 {
-                    platformDb.Database.Migrate();
+                    var platformDb = scope.ServiceProvider.GetRequiredService<DoWhattaDBContext>();
+                    if (!platformDb.Database.IsSqlite())
+                    {
+                        platformDb.Database.Migrate();
+                    }
+
+                    var productDb = scope.ServiceProvider.GetRequiredService<DoWhattaProductDBContext>();
+                    if (!productDb.Database.IsSqlite())
+                    {
+                        productDb.Database.Migrate();
+                    }
                 }
 
-                var productDb = scope.ServiceProvider.GetRequiredService<DoWhattaProductDBContext>();
-                if (!productDb.Database.IsSqlite())
-                {
-                    productDb.Database.Migrate();
-                }
+                app.UseSerilogRequestLogging();
+                app.UseCors("AllowBlazorClient");
+                app.MapHub<NotificationHub>("/notificationHub");
+                app.ConfigureApplication();
+
+                Log.Information("NewDoor API starting...");
+                app.Run();
             }
-
-            app.UseCors("AllowBlazorClient");
-            app.ConfigureApplication();
-            // yet to implement NotificationHub
-
-            app.Run();
+            catch (Exception ex)
+            {
+                Log.Fatal(ex, "NewDoor API failed to start");
+                throw;
+            }
+            finally
+            {
+                Log.CloseAndFlush();
+            }
         }
     }
 }

@@ -7,6 +7,8 @@ using DoWhatta.Platform.Data.Extensions;
 using DoWhatta.Platform.Infrastructure.HttpClients;
 using DoWhatta.Platform.Infrastructure.Messaging.ServiceBus;
 using NewDoor.Processor.Runtime.Settings;
+using NewDoor.Processor.Runtime.Services;
+using Serilog;
 using ApplicationSettings = NewDoor.Processor.Runtime.Settings.ApplicationSettings;
 
 namespace NewDoor.Processor.Runtime
@@ -15,36 +17,71 @@ namespace NewDoor.Processor.Runtime
     {
         public static void Main(string[] args)
         {
-            var builder = WebApplication.CreateBuilder(args);
-
-            // Add CORS policy
-            builder.Services.AddCors(options =>
+            try
             {
-                options.AddPolicy("AllowBlazorClient",
-                    policy =>
-                    {
-                        policy
-                             .WithOrigins(
-                                 "https://localhost:7092",                 // Local Blazor
-                                 "http://localhost:7092",
-                                 "https://dowhatta.azurewebsites.net"      // Azure Blazor App
-                             )
-                             .AllowAnyHeader()
-                             .AllowAnyMethod()
-                             .AllowCredentials(); // only if using auth cookies / tokens
-                    });
-            });
+                var builder = WebApplication.CreateBuilder(args);
 
-            builder.WebHost.AddApplicationConfiguration<ApplicationSettings>();
-            builder.Services.AddPlatformServices(builder.Configuration);
+                Log.Logger = new LoggerConfiguration()
+                    .ReadFrom.Configuration(builder.Configuration)
+                    .Enrich.FromLogContext()
+                    .WriteTo.Console()
+                    .CreateLogger();
 
-            var app = builder.Build();
+                builder.Host.UseSerilog();
 
-            app.UseCors("AllowBlazorClient");
-            app.ConfigureApplication();
-            // yet to implement NotificationHub
+                builder.Services.AddCors(options =>
+                {
+                    options.AddPolicy("AllowBlazorClient",
+                        policy =>
+                        {
+                            policy
+                                 .WithOrigins(
+                                     "https://localhost:7092",
+                                     "http://localhost:7092",
+                                     "https://dowhatta.azurewebsites.net"
+                                 )
+                                 .AllowAnyHeader()
+                                 .AllowAnyMethod()
+                                 .AllowCredentials();
+                        });
+                });
 
-            app.Run();
+                builder.Services.AddControllers();
+                builder.Services.AddEndpointsApiExplorer();
+                builder.Services.AddSwaggerGen();
+
+                builder.Services.AddSingleton<IEventProcessorService, EventProcessorService>();
+
+                builder.WebHost.AddApplicationConfiguration<ApplicationSettings>();
+                builder.Services.AddPlatformServices(builder.Configuration);
+
+                var app = builder.Build();
+
+                if (app.Environment.IsDevelopment())
+                {
+                    app.UseSwagger();
+                    app.UseSwaggerUI();
+                }
+
+                app.UseSerilogRequestLogging();
+                app.UseCors("AllowBlazorClient");
+                app.UseHttpsRedirection();
+                app.UseAuthorization();
+                app.MapControllers();
+                app.ConfigureApplication();
+
+                Log.Information("Processor Runtime starting...");
+                app.Run();
+            }
+            catch (Exception ex)
+            {
+                Log.Fatal(ex, "Processor Runtime failed to start");
+                throw;
+            }
+            finally
+            {
+                Log.CloseAndFlush();
+            }
         }
     }
 }

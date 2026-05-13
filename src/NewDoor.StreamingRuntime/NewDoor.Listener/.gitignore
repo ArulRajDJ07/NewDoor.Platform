@@ -1,0 +1,9 @@
+# User Secrets
+secrets.json
+
+# Environment files
+.env
+.env.local
+
+# appsettings with secrets (if accidentally created)
+appsettings.*.local.json

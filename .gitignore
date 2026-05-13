@@ -428,3 +428,4 @@ FodyWeavers.xsd
 *.msm
 *.msp
 /src/NewDoor.Presentation/NewDoor.API/Docs
+*.md

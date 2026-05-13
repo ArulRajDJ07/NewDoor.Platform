@@ -38,6 +38,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\NewDoor.StreamingRuntime\NewDoor.EventBus\NewDoor.EventBus.csproj" />
+    <ProjectReference Include="..\..\NewDoor.PlatformShared\NewDoor.Platform.DTO\NewDoor.Platform.DTO.csproj" />
   </ItemGroup>
 
 

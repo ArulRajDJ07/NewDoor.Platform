@@ -63,18 +63,17 @@
     <PackageReference Include="Swashbuckle.AspNetCore.Annotations" />
     <PackageReference Include="Swashbuckle.AspNetCore.SwaggerGen" />
     <PackageReference Include="Swashbuckle.AspNetCore.SwaggerUI" />
+
+    <!-- Kafka Native Libraries -->
+    <PackageReference Include="librdkafka.redist" VersionOverride="2.7.0" />
   </ItemGroup>
 
   <ItemGroup>
-    <Reference Include="DoWhatta.Platform">
-      <HintPath>..\..\Resource\dowhatta\DoWhatta.Platform.dll</HintPath>
-    </Reference>
-    <Reference Include="DoWhatta.Platform.DTO">
-      <HintPath>..\..\Resource\dowhatta\DoWhatta.Platform.DTO.dll</HintPath>
-    </Reference>
-    <Reference Include="DoWhatta.Platform.Entities">
-      <HintPath>..\..\Resource\dowhatta\DoWhatta.Platform.Entities.dll</HintPath>
-    </Reference>
+    <ProjectReference Include="..\NewDoor.EventBus\NewDoor.EventBus.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Folder Include="Tests\" />
   </ItemGroup>
 
 </Project>

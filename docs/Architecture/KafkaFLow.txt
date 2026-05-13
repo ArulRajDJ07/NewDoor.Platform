@@ -1,0 +1,108 @@
+┌──────────────────────────┐
+│ NewDoor.DeviceSimulator  │
+│ - Smoke Events           │
+│ - Heat Events            │
+│ - Heartbeat Events       │
+└────────────┬─────────────┘
+             │ HTTP Payload
+             ▼
+┌──────────────────────────┐
+│ NewDoor.Gateway.Api      │
+│ - Authentication         │
+│ - Validation             │
+│ - Payload Normalization  │
+└────────────┬─────────────┘
+             │ Publish
+             ▼
+══════════════════════════════════════
+Kafka Topic:
+newdoor.device.telemetry
+══════════════════════════════════════
+             │ Consume
+             ▼
+┌──────────────────────────┐
+│ NewDoor.Listener         │
+│ - Enrichment             │
+│ - Metadata Resolution    │
+│ - Runtime Event Mapping  │
+└────────────┬─────────────┘
+             │ Send Runtime Event
+             ▼
+┌──────────────────────────┐
+│ NewDoor.Workflow.        │
+│ Orchestrator             │
+│ - Workflow Routing       │
+│ - Runtime Coordination   │
+│ - Pipeline Sequencing    │
+└────────────┬─────────────┘
+             │ Dispatch For Processing
+             ▼
+┌──────────────────────────┐
+│ NewDoor.Processor.       │
+│ Runtime                  │
+│ - Rule Evaluation        │
+│ - Correlation Engine     │
+│ - Severity Calculation   │
+│ - Alarm Detection        │
+└────────────┬─────────────┘
+             │ Return Processed Result
+             ▼
+┌──────────────────────────┐
+│ NewDoor.Workflow.        │
+│ Orchestrator             │
+│ - Result Coordination    │
+│ - Final Workflow State   │
+│ - Action Decision        │
+└───────┬─────────┬────────┘
+        │         │
+        │         │
+        │         ▼
+        │   ══════════════════════════
+        │   Kafka Topic:
+        │   newdoor.audit.history
+        │   ══════════════════════════
+        │
+        ▼
+══════════════════════════════════════
+Kafka Topic:
+newdoor.incident.detected
+══════════════════════════════════════
+             │ High Severity
+             ▼
+══════════════════════════════════════
+Kafka Topic:
+newdoor.alarm.triggered
+══════════════════════════════════════
+             │ Consume
+             ▼
+┌──────────────────────────┐
+│ NewDoor.Action.          │
+│ Dispatcher               │
+│ - Alarm Handler          │
+│ - Incident Handler       │
+│ - Notification Handler   │
+│ - SignalR Trigger        │
+└────────────┬─────────────┘
+             │ Publish
+             ▼
+══════════════════════════════════════
+Kafka Topic:
+newdoor.ui.broadcast
+══════════════════════════════════════
+             │ Consume
+             ▼
+┌──────────────────────────┐
+│ NewDoor.API              │
+│ - SignalR Hub            │
+│ - Dashboard APIs         │
+│ - Aggregation APIs       │
+└────────────┬─────────────┘
+             │ Broadcast
+             ▼
+┌──────────────────────────┐
+│ NewDoor.Web              │
+│ - Live Dashboard         │
+│ - Alerts                 │
+│ - Device Monitoring      │
+│ - Incident View          │
+└──────────────────────────┘

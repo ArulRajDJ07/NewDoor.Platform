@@ -1,20 +1,9 @@
-using NewDoor.Platform.DTO.Common;
+namespace NewDoor.Listener.Models;
 
-namespace NewDoor.Gateway.Api.Models;
-
-public class DeviceTelemetryRequest : BaseDeviceDto
+public class EnrichedTelemetryEvent
 {
-    public string EventType { get; set; } = string.Empty;
-    public DateTime TimestampUtc { get; set; }
-    public string Status { get; set; } = string.Empty;
-    public int BatteryLevel { get; set; }
-    public double? Temperature { get; set; }
-    public double? SmokeLevel { get; set; }
-    public string? SignalStrength { get; set; }
-}
-
-public class EnrichedTelemetryEvent : BaseEvent
-{
+    public string EventId { get; set; } = Guid.NewGuid().ToString();
+    public string CorrelationId { get; set; } = Guid.NewGuid().ToString();
     public string EventName { get; set; } = "DeviceTelemetryReceived";
     public string EventType { get; set; } = string.Empty;
     public string DeviceId { get; set; } = string.Empty;
@@ -24,16 +13,9 @@ public class EnrichedTelemetryEvent : BaseEvent
     public string BuildingCode { get; set; } = string.Empty;
     public string Floor { get; set; } = string.Empty;
     public string Zone { get; set; } = string.Empty;
+    public DateTime TimestampUtc { get; set; }
     public TelemetryPayload Payload { get; set; } = new();
     public TelemetryMetadata Metadata { get; set; } = new();
-
-    public EnrichedTelemetryEvent() : base()
-    {
-    }
-
-    public EnrichedTelemetryEvent(string correlationId) : base(correlationId)
-    {
-    }
 }
 
 public class TelemetryPayload
@@ -45,13 +27,8 @@ public class TelemetryPayload
     public string Status { get; set; } = string.Empty;
 }
 
-public class TelemetryMetadata : BaseMetadata
+public class TelemetryMetadata
 {
-    public TelemetryMetadata() : base("NewDoor.Gateway.Api")
-    {
-    }
-
-    public TelemetryMetadata(string source) : base(source)
-    {
-    }
+    public string Source { get; set; } = "NewDoor.Gateway.Api";
+    public DateTime GeneratedUtc { get; set; } = DateTime.UtcNow;
 }
