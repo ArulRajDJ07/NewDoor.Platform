@@ -8,6 +8,11 @@ using DoWhatta.Platform.Infrastructure.HttpClients;
 using DoWhatta.Platform.Infrastructure.Messaging.ServiceBus;
 using NewDoor.Processor.Runtime.Settings;
 using NewDoor.Processor.Runtime.Services;
+using NewDoor.EventBus.Consumers;
+using NewDoor.EventBus.Producers;
+using NewDoor.Processor.Runtime.Models;
+using NewDoor.Processor.Runtime.Handlers;
+using NewDoor.Processor.Runtime.BackgroundServices;
 using Serilog;
 using ApplicationSettings = NewDoor.Processor.Runtime.Settings.ApplicationSettings;
 
@@ -50,18 +55,52 @@ namespace NewDoor.Processor.Runtime
                 builder.Services.AddEndpointsApiExplorer();
                 builder.Services.AddSwaggerGen();
 
+                // Register business services
                 builder.Services.AddSingleton<IEventProcessorService, EventProcessorService>();
+
+                // Register Kafka configuration
+                builder.Services.AddSingleton<KafkaConsumerConfig>(sp =>
+                {
+                    var config = sp.GetRequiredService<IConfiguration>();
+                    return new KafkaConsumerConfig
+                    {
+                        BootstrapServers = config["Kafka:BootstrapServers"] ?? "localhost:9092",
+                        Username = config["Kafka:Username"] ?? "",
+                        Password = config["Kafka:Password"] ?? "",
+                        GroupId = config["Kafka:GroupId"] ?? "processor-runtime-group"
+                    };
+                });
+
+                builder.Services.AddSingleton<KafkaProducerConfig>(sp =>
+                {
+                    var config = sp.GetRequiredService<IConfiguration>();
+                    return new KafkaProducerConfig
+                    {
+                        BootstrapServers = config["Kafka:BootstrapServers"] ?? "localhost:9092",
+                        Username = config["Kafka:Username"] ?? "",
+                        Password = config["Kafka:Password"] ?? "",
+                        MessageTimeoutMs = int.Parse(config["Kafka:MessageTimeoutMs"] ?? "30000"),
+                        RequestTimeoutMs = int.Parse(config["Kafka:RequestTimeoutMs"] ?? "30000")
+                    };
+                });
+
+                // Register Kafka producer
+                builder.Services.AddSingleton<IKafkaProducer, KafkaProducer>();
+
+                // Register Kafka consumer and handler
+                builder.Services.AddSingleton<IKafkaMessageHandler<ProcessorRequest>, ProcessingRequestMessageHandler>();
+                builder.Services.AddSingleton<IKafkaConsumer, KafkaConsumer<ProcessorRequest>>();
+
+                // Register background service
+                builder.Services.AddHostedService<ProcessingRequestConsumerService>();
 
                 builder.WebHost.AddApplicationConfiguration<ApplicationSettings>();
                 builder.Services.AddPlatformServices(builder.Configuration);
 
                 var app = builder.Build();
 
-                if (app.Environment.IsDevelopment())
-                {
-                    app.UseSwagger();
-                    app.UseSwaggerUI();
-                }
+                app.UseSwagger();
+                app.UseSwaggerUI();
 
                 app.UseSerilogRequestLogging();
                 app.UseCors("AllowBlazorClient");

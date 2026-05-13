@@ -63,6 +63,7 @@ namespace NewDoor.Listener
                 });
 
                 // Register business services
+                builder.Services.AddSingleton<IEventEnrichmentService, EventEnrichmentService>();
                 builder.Services.AddSingleton<IIncidentDetectionService, IncidentDetectionService>();
                 builder.Services.AddSingleton<IKafkaMessageHandler<EnrichedTelemetryEvent>, TelemetryMessageHandler>();
 
@@ -75,15 +76,12 @@ namespace NewDoor.Listener
                 var app = builder.Build();
 
                 // Configure middleware pipeline
-                if (app.Environment.IsDevelopment())
+                app.UseSwagger();
+                app.UseSwaggerUI(c =>
                 {
-                    app.UseSwagger();
-                    app.UseSwaggerUI(c =>
-                    {
-                        c.SwaggerEndpoint("/swagger/v1/swagger.json", "NewDoor Listener API v1");
-                        c.RoutePrefix = "swagger"; // Access Swagger at /swagger
-                    });
-                }
+                    c.SwaggerEndpoint("/swagger/v1/swagger.json", "NewDoor Listener API v1");
+                    c.RoutePrefix = "swagger"; // Access Swagger at /swagger
+                });
 
                 app.UseSerilogRequestLogging();
                 app.UseCors("AllowBlazorClient");

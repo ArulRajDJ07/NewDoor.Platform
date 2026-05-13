@@ -4,19 +4,28 @@ using NewDoor.Listener.Models;
 
 namespace NewDoor.Listener.Services;
 
+/// <summary>
+/// Handles incoming telemetry messages with:
+/// - Metadata Enrichment
+/// - Event Transformation
+/// - Event Normalization
+/// </summary>
 public class TelemetryMessageHandler : IKafkaMessageHandler<EnrichedTelemetryEvent>
 {
+    private readonly IEventEnrichmentService _enrichmentService;
     private readonly IIncidentDetectionService _incidentDetectionService;
     private readonly IKafkaProducer _kafkaProducer;
     private readonly IConfiguration _configuration;
     private readonly ILogger<TelemetryMessageHandler> _logger;
 
     public TelemetryMessageHandler(
+        IEventEnrichmentService enrichmentService,
         IIncidentDetectionService incidentDetectionService,
         IKafkaProducer kafkaProducer,
         IConfiguration configuration,
         ILogger<TelemetryMessageHandler> logger)
     {
+        _enrichmentService = enrichmentService;
         _incidentDetectionService = incidentDetectionService;
         _kafkaProducer = kafkaProducer;
         _configuration = configuration;
@@ -27,39 +36,76 @@ public class TelemetryMessageHandler : IKafkaMessageHandler<EnrichedTelemetryEve
     {
         try
         {
-            _logger.LogInformation("Processing telemetry: EventId={EventId}, DeviceId={DeviceId}, EventType={EventType}", 
+            _logger.LogInformation(
+                "Processing telemetry: EventId={EventId}, DeviceId={DeviceId}, EventType={EventType}", 
                 message.EventId, message.DeviceId, message.EventType);
 
-            var runtimeEvent = new RuntimeTelemetryEvent
+            // Step 1: Event Categorization
+            var eventCategory = _enrichmentService.DetermineEventCategory(message.EventType);
+
+            // Step 2: Metadata Enrichment - Determine pipeline routing and priority
+            var pipeline = _enrichmentService.DeterminePipeline(eventCategory);
+            var priority = _enrichmentService.DeterminePriority(
+                message.EventType, 
+                message.Payload.SmokeLevel, 
+                message.Payload.Temperature);
+
+            // Step 3: Event Transformation & Normalization - Create enriched workflow event
+            var enrichedEvent = new EnrichedWorkflowEvent
             {
                 EventId = message.EventId,
                 CorrelationId = message.CorrelationId,
-                DeviceId = message.DeviceId,
-                DeviceName = message.DeviceName,
-                DeviceType = message.DeviceType,
-                BuildingId = message.BuildingId,
-                BuildingCode = message.BuildingCode,
-                Floor = message.Floor,
-                Zone = message.Zone,
                 EventType = message.EventType,
-                TimestampUtc = message.TimestampUtc,
-                Temperature = message.Payload.Temperature,
-                SmokeLevel = message.Payload.SmokeLevel,
-                BatteryLevel = message.Payload.BatteryLevel,
-                SignalStrength = message.Payload.SignalStrength,
-                Status = message.Payload.Status,
-                Source = "NewDoor.Listener"
+                EventCategory = eventCategory,
+
+                Device = new DeviceInfo
+                {
+                    DeviceId = message.DeviceId,
+                    DeviceType = message.DeviceType,
+                    DeviceName = message.DeviceName
+                },
+
+                Location = new LocationInfo
+                {
+                    BuildingId = message.BuildingId,
+                    BuildingCode = message.BuildingCode,
+                    Floor = message.Floor,
+                    Zone = message.Zone
+                },
+
+                Telemetry = new TelemetryData
+                {
+                    Temperature = message.Payload.Temperature,
+                    SmokeLevel = message.Payload.SmokeLevel,
+                    BatteryLevel = message.Payload.BatteryLevel
+                },
+
+                Runtime = new RuntimeInfo
+                {
+                    Pipeline = pipeline,
+                    Priority = priority
+                },
+
+                Metadata = new EventMetadata
+                {
+                    ReceivedBy = "NewDoor.Listener",
+                    NormalizedUtc = DateTime.UtcNow
+                }
             };
 
-            var runtimeTopic = _configuration["Kafka:RuntimeEventTopic"] ?? "newdoor.runtime.event";
-            await _kafkaProducer.PublishAsync(runtimeTopic, runtimeEvent.DeviceId, runtimeEvent, cancellationToken);
+            // Step 4: Publish to workflow events topic
+            var workflowTopic = _configuration["Kafka:WorkflowEventTopic"] ?? "newdoor.workflow.events";
+            await _kafkaProducer.PublishAsync(workflowTopic, enrichedEvent.Device.DeviceId, enrichedEvent, cancellationToken);
 
-            _logger.LogInformation("Published runtime event to Workflow Orchestrator: EventId={EventId}, Topic={Topic}", 
-                runtimeEvent.EventId, runtimeTopic);
+            _logger.LogInformation(
+                "Published enriched event: EventId={EventId}, Category={Category}, Pipeline={Pipeline}, Priority={Priority}, Topic={Topic}", 
+                enrichedEvent.EventId, enrichedEvent.EventCategory, enrichedEvent.Runtime.Pipeline, 
+                enrichedEvent.Runtime.Priority, workflowTopic);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error handling telemetry message: EventId={EventId}, DeviceId={DeviceId}", 
+            _logger.LogError(ex, 
+                "Error handling telemetry message: EventId={EventId}, DeviceId={DeviceId}", 
                 message.EventId, message.DeviceId);
             throw;
         }

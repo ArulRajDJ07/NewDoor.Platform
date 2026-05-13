@@ -1,18 +1,19 @@
 using NewDoor.EventBus.Consumers;
 using NewDoor.Workflow.Orchestrator.Models;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace NewDoor.Workflow.Orchestrator.BackgroundServices;
 
-public class RuntimeEventConsumerService : BackgroundService
+public class EventConsumerService : BackgroundService
 {
     private readonly IKafkaConsumer _kafkaConsumer;
     private readonly IConfiguration _configuration;
-    private readonly ILogger<RuntimeEventConsumerService> _logger;
+    private readonly ILogger<EventConsumerService> _logger;
 
-    public RuntimeEventConsumerService(
-        IKafkaConsumer kafkaConsumer,
+    public EventConsumerService(
+        [FromKeyedServices("EventConsumer")] IKafkaConsumer kafkaConsumer,
         IConfiguration configuration,
-        ILogger<RuntimeEventConsumerService> logger)
+        ILogger<EventConsumerService> logger)
     {
         _kafkaConsumer = kafkaConsumer;
         _configuration = configuration;
@@ -23,7 +24,7 @@ public class RuntimeEventConsumerService : BackgroundService
     {
         try
         {
-            var topic = _configuration["Kafka:RuntimeEventTopic"] ?? "newdoor.runtime.event";
+            var topic = _configuration["Kafka:RuntimeEventTopic"] ?? "newdoor.workflow.events";
             _logger.LogInformation("Starting Runtime Event Consumer Service for topic: {Topic}", topic);
 
             await _kafkaConsumer.StartConsumingAsync(topic, stoppingToken);
