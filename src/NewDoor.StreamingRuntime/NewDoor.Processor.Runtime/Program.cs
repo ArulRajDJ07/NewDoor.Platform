@@ -20,7 +20,7 @@ namespace NewDoor.Processor.Runtime
 {
     public class Program
     {
-        public static void Main(string[] args)
+        public static async Task Main(string[] args)
         {
             try
             {
@@ -54,6 +54,18 @@ namespace NewDoor.Processor.Runtime
                 builder.Services.AddControllers();
                 builder.Services.AddEndpointsApiExplorer();
                 builder.Services.AddSwaggerGen();
+
+                // Register HttpClient for RuleConfigurationClient
+                builder.Services.AddHttpClient<IRuleConfigurationClient, RuleConfigurationClient>(client =>
+                {
+                    var apiBaseUrl = builder.Configuration["ApiSettings:NewDoorApiBaseUrl"] 
+                        ?? "https://newdoor-api.azurewebsites.net";
+                    client.BaseAddress = new Uri(apiBaseUrl);
+                    client.Timeout = TimeSpan.FromSeconds(30);
+                });
+
+                // Register rule configuration cache as singleton
+                builder.Services.AddSingleton<IRuleConfigurationCache, RuleConfigurationCache>();
 
                 // Register business services
                 builder.Services.AddSingleton<IEventProcessorService, EventProcessorService>();
@@ -98,6 +110,14 @@ namespace NewDoor.Processor.Runtime
                 builder.Services.AddPlatformServices(builder.Configuration);
 
                 var app = builder.Build();
+
+                // Initialize rule configuration cache
+                using (var scope = app.Services.CreateScope())
+                {
+                    var ruleCache = scope.ServiceProvider.GetRequiredService<IRuleConfigurationCache>();
+                    await ruleCache.InitializeAsync();
+                    Log.Information("Rule configuration cache initialized successfully");
+                }
 
                 app.UseSwagger();
                 app.UseSwaggerUI();

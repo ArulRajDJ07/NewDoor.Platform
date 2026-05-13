@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using NewDoor.API.Data;
 
@@ -11,9 +12,11 @@ using NewDoor.API.Data;
 namespace NewDoor.API.Migrations
 {
     [DbContext(typeof(DoWhattaProductDBContext))]
-    partial class DoWhattaProductDBContextModelSnapshot : ModelSnapshot
+    [Migration("20260513231041_entitieds")]
+    partial class entitieds
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder

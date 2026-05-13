@@ -10,10 +10,12 @@ public interface IEventProcessorService
 public class EventProcessorService : IEventProcessorService
 {
     private readonly ILogger<EventProcessorService> _logger;
+    private readonly IRuleConfigurationCache _ruleCache;
 
-    public EventProcessorService(ILogger<EventProcessorService> logger)
+    public EventProcessorService(ILogger<EventProcessorService> logger, IRuleConfigurationCache ruleCache)
     {
         _logger = logger;
+        _ruleCache = ruleCache;
     }
 
     public async Task<ProcessorResponse> ProcessAsync(ProcessorRequest request, CancellationToken cancellationToken)
@@ -52,36 +54,70 @@ public class EventProcessorService : IEventProcessorService
 
     private void EvaluateRules(RuntimeTelemetryEvent telemetryEvent, ProcessorResponse response)
     {
-        if (telemetryEvent.EventType == "SmokeDetected" && telemetryEvent.SmokeLevel > 50)
+        var rules = _ruleCache.GetRulesByEventType(telemetryEvent.EventType);
+
+        if (!rules.Any())
         {
-            response.IsIncident = true;
-            response.IncidentType = "Fire";
-            response.RuleTriggered = "HighSmokeLevel_Rule";
-            response.ConfidenceScore = CalculateConfidence(telemetryEvent.SmokeLevel, 50, 100);
-            
-            _logger.LogWarning("Fire incident detected: DeviceId={DeviceId}, SmokeLevel={SmokeLevel}", 
-                telemetryEvent.DeviceId, telemetryEvent.SmokeLevel);
+            _logger.LogDebug("No rules found for EventType={EventType}", telemetryEvent.EventType);
+            return;
         }
-        else if (telemetryEvent.EventType == "HeatDetected" && telemetryEvent.Temperature > 60)
+
+        foreach (var rule in rules)
         {
-            response.IsIncident = true;
-            response.IncidentType = "Fire";
-            response.RuleTriggered = "HighTemperature_Rule";
-            response.ConfidenceScore = CalculateConfidence(telemetryEvent.Temperature, 60, 100);
-            
-            _logger.LogWarning("Fire incident detected: DeviceId={DeviceId}, Temperature={Temperature}", 
-                telemetryEvent.DeviceId, telemetryEvent.Temperature);
+            if (EvaluateRule(telemetryEvent, rule))
+            {
+                response.IsIncident = true;
+                response.IncidentType = rule.IncidentType;
+                response.RuleTriggered = rule.RuleName;
+                response.Severity = rule.Severity;
+
+                var propertyValue = GetPropertyValue(telemetryEvent, rule.PropertyName);
+                response.ConfidenceScore = CalculateConfidence(propertyValue, rule.Threshold, GetMaxValue(rule.PropertyName));
+
+                _logger.LogWarning("Rule triggered: RuleName={RuleName}, DeviceId={DeviceId}, Property={PropertyName}, Value={Value}, Threshold={Threshold}", 
+                    rule.RuleName, telemetryEvent.DeviceId, rule.PropertyName, propertyValue, rule.Threshold);
+
+                break;
+            }
         }
-        else if (telemetryEvent.BatteryLevel < 20)
+    }
+
+    private bool EvaluateRule(RuntimeTelemetryEvent telemetryEvent, NewDoor.Platform.DTO.Features.RuleConfigurations.Models.RuleConfigurationResponse rule)
+    {
+        var propertyValue = GetPropertyValue(telemetryEvent, rule.PropertyName);
+
+        return rule.Operator switch
         {
-            response.IsIncident = true;
-            response.IncidentType = "LowBattery";
-            response.RuleTriggered = "LowBattery_Rule";
-            response.ConfidenceScore = 1.0;
-            
-            _logger.LogInformation("Low battery detected: DeviceId={DeviceId}, BatteryLevel={BatteryLevel}", 
-                telemetryEvent.DeviceId, telemetryEvent.BatteryLevel);
-        }
+            ">" => propertyValue > rule.Threshold,
+            ">=" => propertyValue >= rule.Threshold,
+            "<" => propertyValue < rule.Threshold,
+            "<=" => propertyValue <= rule.Threshold,
+            "==" => Math.Abs(propertyValue - rule.Threshold) < 0.001,
+            "!=" => Math.Abs(propertyValue - rule.Threshold) >= 0.001,
+            _ => false
+        };
+    }
+
+    private double GetPropertyValue(RuntimeTelemetryEvent telemetryEvent, string propertyName)
+    {
+        return propertyName switch
+        {
+            "SmokeLevel" => telemetryEvent.SmokeLevel,
+            "Temperature" => telemetryEvent.Temperature,
+            "BatteryLevel" => telemetryEvent.BatteryLevel,
+            _ => 0.0
+        };
+    }
+
+    private double GetMaxValue(string propertyName)
+    {
+        return propertyName switch
+        {
+            "SmokeLevel" => 100.0,
+            "Temperature" => 100.0,
+            "BatteryLevel" => 100.0,
+            _ => 100.0
+        };
     }
 
     private void CorrelateEvents(RuntimeTelemetryEvent telemetryEvent, ProcessorResponse response)

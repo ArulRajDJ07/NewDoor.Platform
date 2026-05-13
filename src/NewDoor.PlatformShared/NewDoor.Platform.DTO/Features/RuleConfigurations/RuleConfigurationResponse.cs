@@ -5,6 +5,14 @@
         {
             public int Id { get; set; }
 
-    
+            public int RuleId { get; set; }
+
+            public string ConfigKey { get; set; } = string.Empty;
+
+            public string ConfigValue { get; set; } = string.Empty;
+
+            public string Unit { get; set; } = string.Empty;
+
+            public bool IsActive { get; set; }
         }
     }
