@@ -68,11 +68,7 @@ namespace NewDoor.Workflow.Orchestrator
 
                 #endregion
 
-                #region HTTP Clients
 
-                builder.Services.AddHttpClient<IActionDispatcherClient, ActionDispatcherClient>();
-
-                #endregion
 
                 #region Kafka Producer
 

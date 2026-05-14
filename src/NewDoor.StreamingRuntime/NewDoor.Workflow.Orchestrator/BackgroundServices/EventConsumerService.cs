@@ -33,6 +33,16 @@ public class EventConsumerService : BackgroundService
             _logger.LogInformation("Starting consumer: {Topic}", topic);
 
             await _kafkaConsumer.StartConsumingAsync(topic, stoppingToken);
+
+            // Keep the task alive while the consumer is running
+            while (!stoppingToken.IsCancellationRequested)
+            {
+                await Task.Delay(1000, stoppingToken);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            _logger.LogInformation("Consumer service cancelled");
         }
         catch (Exception ex)
         {

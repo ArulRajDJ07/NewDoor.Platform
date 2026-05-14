@@ -1,14 +1,12 @@
 using NewDoor.EventBus.Consumers;
 using NewDoor.EventBus.Producers;
 using NewDoor.Workflow.Orchestrator.Models;
-using NewDoor.Workflow.Orchestrator.Services;
 
 namespace NewDoor.Workflow.Orchestrator.Handlers;
 
 public class ProcessingResultMessageHandler : IKafkaMessageHandler<ProcessorResponse>
 {
     #region Fields
-    private readonly IActionDispatcherClient _actionDispatcherClient;
     private readonly IKafkaProducer _kafkaProducer;
     private readonly IConfiguration _configuration;
     private readonly ILogger<ProcessingResultMessageHandler> _logger;
@@ -16,12 +14,10 @@ public class ProcessingResultMessageHandler : IKafkaMessageHandler<ProcessorResp
 
     #region Constructor
     public ProcessingResultMessageHandler(
-        IActionDispatcherClient actionDispatcherClient,
         IKafkaProducer kafkaProducer,
         IConfiguration configuration,
         ILogger<ProcessingResultMessageHandler> logger)
     {
-        _actionDispatcherClient = actionDispatcherClient;
         _kafkaProducer = kafkaProducer;
         _configuration = configuration;
         _logger = logger;
@@ -33,12 +29,21 @@ public class ProcessingResultMessageHandler : IKafkaMessageHandler<ProcessorResp
     {
         try
         {
-            _logger.LogInformation("Processing result: {EventType}", processorResponse.EventType);
+            _logger.LogInformation("=== Received ProcessorResponse from newdoor.runtime.result ===");
+            _logger.LogInformation("Key: {Key}", key);
+            _logger.LogInformation("CorrelationId: {CorrelationId}", processorResponse.CorrelationId);
+            _logger.LogInformation("EventType: {EventType}", processorResponse.EventType);
+            _logger.LogInformation("IsIncident: {IsIncident}, IsAlarm: {IsAlarm}", processorResponse.IsIncident, processorResponse.IsAlarm);
+            _logger.LogInformation("Severity: {Severity}, IncidentType: {IncidentType}", processorResponse.Severity, processorResponse.IncidentType);
+            _logger.LogInformation("========================================================");
+
             await ClassifyAndRouteAsync(processorResponse, cancellationToken);
+
+            _logger.LogInformation("Successfully processed ProcessorResponse: {CorrelationId}", processorResponse.CorrelationId);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error handling result");
+            _logger.LogError(ex, "Error handling ProcessorResponse: CorrelationId={CorrelationId}", processorResponse.CorrelationId);
             throw;
         }
     }
@@ -78,150 +83,207 @@ public class ProcessingResultMessageHandler : IKafkaMessageHandler<ProcessorResp
     private async Task HandleIncidentEventAsync(ProcessorResponse processorResponse, CancellationToken cancellationToken)
     {
         await PublishIncidentAsync(processorResponse, cancellationToken);
-        await DispatchActionsAsync(processorResponse, cancellationToken);
+        await PublishAuditHistoryAsync(processorResponse, cancellationToken);
     }
 
     private async Task HandleAlarmEventAsync(ProcessorResponse processorResponse, CancellationToken cancellationToken)
     {
         await PublishAlarmAsync(processorResponse, cancellationToken);
-        await DispatchActionsAsync(processorResponse, cancellationToken);
+        await PublishAuditHistoryAsync(processorResponse, cancellationToken);
     }
 
     private async Task HandleNotificationEventAsync(ProcessorResponse processorResponse, CancellationToken cancellationToken)
     {
-        await DispatchActionsAsync(processorResponse, cancellationToken);
+        await PublishAuditHistoryAsync(processorResponse, cancellationToken);
     }
 
     private async Task HandleEscalationEventAsync(ProcessorResponse processorResponse, CancellationToken cancellationToken)
     {
         await PublishIncidentAsync(processorResponse, cancellationToken);
         await PublishAlarmAsync(processorResponse, cancellationToken);
-        await DispatchActionsAsync(processorResponse, cancellationToken);
+        await PublishAuditHistoryAsync(processorResponse, cancellationToken);
     }
 
     private async Task HandleWorkflowEventAsync(ProcessorResponse processorResponse, CancellationToken cancellationToken)
     {
-        await DispatchActionsAsync(processorResponse, cancellationToken);
+        await PublishAuditHistoryAsync(processorResponse, cancellationToken);
     }
 
     private async Task HandleIncidentOrAlarmAsync(ProcessorResponse processorResponse, CancellationToken cancellationToken)
     {
-        await DispatchActionsAsync(processorResponse, cancellationToken);
-
         if (processorResponse.IsIncident)
             await PublishIncidentAsync(processorResponse, cancellationToken);
 
         if (processorResponse.IsAlarm)
             await PublishAlarmAsync(processorResponse, cancellationToken);
-    }
-    #endregion
 
-    #region Action Dispatch
-    private async Task DispatchActionsAsync(ProcessorResponse processorResponse, CancellationToken cancellationToken)
-    {
-        var actionRequest = new ActionDispatchRequest
-        {
-            CorrelationId = processorResponse.CorrelationId,
-            ActionType = DetermineActionType(processorResponse),
-            Severity = processorResponse.Severity,
-            IncidentType = processorResponse.IncidentType,
-            DeviceId = processorResponse.AdditionalData.GetValueOrDefault("DeviceId", "").ToString() ?? "",
-            BuildingId = int.TryParse(processorResponse.AdditionalData.GetValueOrDefault("BuildingId", 0).ToString(), out var buildingId) ? buildingId : 0,
-            BuildingCode = processorResponse.AdditionalData.GetValueOrDefault("BuildingCode", "").ToString() ?? "",
-            Floor = processorResponse.AdditionalData.GetValueOrDefault("Floor", "").ToString() ?? "",
-            Zone = processorResponse.AdditionalData.GetValueOrDefault("Zone", "").ToString() ?? "",
-            Context = new Dictionary<string, object>
-            {
-                { "Temperature", processorResponse.AdditionalData.GetValueOrDefault("Temperature", 0) },
-                { "SmokeLevel", processorResponse.AdditionalData.GetValueOrDefault("SmokeLevel", 0) },
-                { "RuleTriggered", processorResponse.RuleTriggered },
-                { "ConfidenceScore", processorResponse.ConfidenceScore }
-            }
-        };
-
-        await _actionDispatcherClient.DispatchActionAsync(actionRequest, cancellationToken);
-    }
-
-    private string DetermineActionType(ProcessorResponse processorResponse)
-    {
-        if (processorResponse.IsAlarm && processorResponse.Severity == "Critical")
-        {
-            return "EmergencyAlert";
-        }
-        else if (processorResponse.IsAlarm)
-        {
-            return "StandardAlert";
-        }
-        else if (processorResponse.IsIncident)
-        {
-            return "IncidentNotification";
-        }
-
-        return "Notification";
+        await PublishAuditHistoryAsync(processorResponse, cancellationToken);
     }
     #endregion
 
     #region Publishing
     private async Task PublishIncidentAsync(ProcessorResponse processorResponse, CancellationToken cancellationToken)
     {
-
-        var incidentEvent = new IncidentEvent
+        try
         {
-            CorrelationId = processorResponse.CorrelationId,
-            DeviceId = processorResponse.AdditionalData.GetValueOrDefault("DeviceId", "").ToString() ?? "",
-            DeviceName = processorResponse.AdditionalData.GetValueOrDefault("DeviceName", "").ToString() ?? "",
-            BuildingId = int.TryParse(processorResponse.AdditionalData.GetValueOrDefault("BuildingId", 0).ToString(), out var buildingId) ? buildingId : 0,
-            BuildingCode = processorResponse.AdditionalData.GetValueOrDefault("BuildingCode", "").ToString() ?? "",
-            IncidentType = processorResponse.IncidentType,
-            Severity = processorResponse.Severity,
-            ConfidenceScore = processorResponse.ConfidenceScore,
-            RuleTriggered = processorResponse.RuleTriggered,
-            DetectedAtUtc = DateTime.UtcNow,
-            TelemetryData = new Dictionary<string, object>
+            var incidentEvent = new IncidentEvent
             {
-                { "Temperature", processorResponse.AdditionalData.GetValueOrDefault("Temperature", 0) },
-                { "SmokeLevel", processorResponse.AdditionalData.GetValueOrDefault("SmokeLevel", 0) },
-                { "BatteryLevel", processorResponse.AdditionalData.GetValueOrDefault("BatteryLevel", 0) },
-                { "Floor", processorResponse.AdditionalData.GetValueOrDefault("Floor", "") },
-                { "Zone", processorResponse.AdditionalData.GetValueOrDefault("Zone", "") }
-            }
-        };
+                CorrelationId = processorResponse.CorrelationId,
+                DeviceId = GetStringValue(processorResponse.AdditionalData, "DeviceId"),
+                DeviceName = GetStringValue(processorResponse.AdditionalData, "DeviceName"),
+                BuildingId = GetIntValue(processorResponse.AdditionalData, "BuildingId"),
+                BuildingCode = GetStringValue(processorResponse.AdditionalData, "BuildingCode"),
+                IncidentType = processorResponse.IncidentType,
+                Severity = processorResponse.Severity,
+                ConfidenceScore = processorResponse.ConfidenceScore,
+                RuleTriggered = processorResponse.RuleTriggered ?? "",
+                DetectedAtUtc = DateTime.UtcNow,
+                TelemetryData = new Dictionary<string, object>
+                {
+                    { "Temperature", GetDoubleValue(processorResponse.AdditionalData, "Temperature") },
+                    { "SmokeLevel", GetDoubleValue(processorResponse.AdditionalData, "SmokeLevel") },
+                    { "BatteryLevel", GetDoubleValue(processorResponse.AdditionalData, "BatteryLevel") },
+                    { "Floor", GetStringValue(processorResponse.AdditionalData, "Floor") },
+                    { "Zone", GetStringValue(processorResponse.AdditionalData, "Zone") }
+                }
+            };
 
-        var incidentTopic = _configuration["Kafka:IncidentDetectedTopic"] ?? "newdoor.incident.detected";
-        await _kafkaProducer.PublishAsync(incidentTopic, incidentEvent.DeviceId, incidentEvent, cancellationToken);
+            var incidentTopic = _configuration["Kafka:IncidentDetectedTopic"] ?? "newdoor.incident.detected";
+            _logger.LogInformation("Publishing incident to topic: {Topic}, DeviceId: {DeviceId}", incidentTopic, incidentEvent.DeviceId);
+            await _kafkaProducer.PublishAsync(incidentTopic, incidentEvent.DeviceId, incidentEvent, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error publishing incident for CorrelationId: {CorrelationId}", processorResponse.CorrelationId);
+            throw;
+        }
     }
 
     private async Task PublishAlarmAsync(ProcessorResponse processorResponse, CancellationToken cancellationToken)
     {
-
-        var buildingCode = processorResponse.AdditionalData.GetValueOrDefault("BuildingCode", "").ToString() ?? "";
-        var floor = processorResponse.AdditionalData.GetValueOrDefault("Floor", "").ToString() ?? "";
-        var zone = processorResponse.AdditionalData.GetValueOrDefault("Zone", "").ToString() ?? "";
-
-        var alarmEvent = new AlarmEvent
+        try
         {
-            CorrelationId = processorResponse.CorrelationId,
-            DeviceId = processorResponse.AdditionalData.GetValueOrDefault("DeviceId", "").ToString() ?? "",
-            DeviceName = processorResponse.AdditionalData.GetValueOrDefault("DeviceName", "").ToString() ?? "",
-            BuildingId = int.TryParse(processorResponse.AdditionalData.GetValueOrDefault("BuildingId", 0).ToString(), out var buildingId) ? buildingId : 0,
-            BuildingCode = buildingCode,
-            Floor = floor,
-            Zone = zone,
-            AlarmType = processorResponse.IncidentType,
-            Severity = processorResponse.Severity,
-            Message = $"High severity {processorResponse.IncidentType} detected at {buildingCode} - {floor}/{zone}",
-            TriggeredAtUtc = DateTime.UtcNow,
-            Context = new Dictionary<string, object>
-            {
-                { "Temperature", processorResponse.AdditionalData.GetValueOrDefault("Temperature", 0) },
-                { "SmokeLevel", processorResponse.AdditionalData.GetValueOrDefault("SmokeLevel", 0) },
-                { "RuleTriggered", processorResponse.RuleTriggered },
-                { "ConfidenceScore", processorResponse.ConfidenceScore }
-            }
-        };
+            var buildingCode = GetStringValue(processorResponse.AdditionalData, "BuildingCode");
+            var floor = GetStringValue(processorResponse.AdditionalData, "Floor");
+            var zone = GetStringValue(processorResponse.AdditionalData, "Zone");
 
-        var alarmTopic = _configuration["Kafka:AlarmTriggeredTopic"] ?? "newdoor.alarm.triggered";
-        await _kafkaProducer.PublishAsync(alarmTopic, alarmEvent.DeviceId, alarmEvent, cancellationToken);
+            var alarmEvent = new AlarmEvent
+            {
+                CorrelationId = processorResponse.CorrelationId,
+                DeviceId = GetStringValue(processorResponse.AdditionalData, "DeviceId"),
+                DeviceName = GetStringValue(processorResponse.AdditionalData, "DeviceName"),
+                BuildingId = GetIntValue(processorResponse.AdditionalData, "BuildingId"),
+                BuildingCode = buildingCode,
+                Floor = floor,
+                Zone = zone,
+                AlarmType = processorResponse.IncidentType,
+                Severity = processorResponse.Severity,
+                Message = $"High severity {processorResponse.IncidentType} detected at {buildingCode} - {floor}/{zone}",
+                TriggeredAtUtc = DateTime.UtcNow,
+                Context = new Dictionary<string, object>
+                {
+                    { "Temperature", GetDoubleValue(processorResponse.AdditionalData, "Temperature") },
+                    { "SmokeLevel", GetDoubleValue(processorResponse.AdditionalData, "SmokeLevel") },
+                    { "RuleTriggered", processorResponse.RuleTriggered ?? "" },
+                    { "ConfidenceScore", processorResponse.ConfidenceScore }
+                }
+            };
+
+            var alarmTopic = _configuration["Kafka:AlarmTriggeredTopic"] ?? "newdoor.alarm.triggered";
+            _logger.LogInformation("Publishing alarm to topic: {Topic}, DeviceId: {DeviceId}", alarmTopic, alarmEvent.DeviceId);
+            await _kafkaProducer.PublishAsync(alarmTopic, alarmEvent.DeviceId, alarmEvent, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error publishing alarm for CorrelationId: {CorrelationId}", processorResponse.CorrelationId);
+            throw;
+        }
     }
+
+    private async Task PublishAuditHistoryAsync(ProcessorResponse processorResponse, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var auditEvent = new AuditHistoryEvent
+            {
+                CorrelationId = processorResponse.CorrelationId,
+                EventType = processorResponse.EventType,
+                DeviceId = GetStringValue(processorResponse.AdditionalData, "DeviceId"),
+                EntityType = processorResponse.IsIncident ? "Incident" : (processorResponse.IsAlarm ? "Alarm" : "Event"),
+                EntityId = processorResponse.ResponseId,
+                Action = "ProcessorResponseReceived",
+                Details = $"{processorResponse.EventType} - {processorResponse.IncidentType} - Severity: {processorResponse.Severity}",
+                CreatedAtUtc = DateTime.UtcNow,
+                Metadata = new Dictionary<string, object>
+                {
+                    { "BuildingId", GetIntValue(processorResponse.AdditionalData, "BuildingId") },
+                    { "BuildingCode", GetStringValue(processorResponse.AdditionalData, "BuildingCode") },
+                    { "Floor", GetStringValue(processorResponse.AdditionalData, "Floor") },
+                    { "Zone", GetStringValue(processorResponse.AdditionalData, "Zone") },
+                    { "IsIncident", processorResponse.IsIncident },
+                    { "IsAlarm", processorResponse.IsAlarm },
+                    { "Severity", processorResponse.Severity },
+                    { "IncidentType", processorResponse.IncidentType },
+                    { "RuleTriggered", processorResponse.RuleTriggered ?? "" },
+                    { "ConfidenceScore", processorResponse.ConfidenceScore },
+                    { "Temperature", GetDoubleValue(processorResponse.AdditionalData, "Temperature") },
+                    { "SmokeLevel", GetDoubleValue(processorResponse.AdditionalData, "SmokeLevel") }
+                }
+            };
+
+            var auditTopic = _configuration["Kafka:AuditHistoryTopic"] ?? "newdoor.audit.history";
+            _logger.LogInformation("Publishing audit history to topic: {Topic}, CorrelationId: {CorrelationId}", auditTopic, auditEvent.CorrelationId);
+            await _kafkaProducer.PublishAsync(auditTopic, auditEvent.CorrelationId, auditEvent, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error publishing audit history for CorrelationId: {CorrelationId}", processorResponse.CorrelationId);
+            throw;
+        }
+    }
+
+    #region Helper Methods
+    private string GetStringValue(Dictionary<string, object>? dict, string key)
+    {
+        if (dict == null || !dict.ContainsKey(key))
+            return "";
+
+        var value = dict[key];
+        return value?.ToString() ?? "";
+    }
+
+    private int GetIntValue(Dictionary<string, object>? dict, string key)
+    {
+        if (dict == null || !dict.ContainsKey(key))
+            return 0;
+
+        var value = dict[key];
+        if (value == null)
+            return 0;
+
+        if (value is int intValue)
+            return intValue;
+
+        return int.TryParse(value.ToString(), out var result) ? result : 0;
+    }
+
+    private double GetDoubleValue(Dictionary<string, object>? dict, string key)
+    {
+        if (dict == null || !dict.ContainsKey(key))
+            return 0.0;
+
+        var value = dict[key];
+        if (value == null)
+            return 0.0;
+
+        if (value is double doubleValue)
+            return doubleValue;
+
+        if (value is int intValue)
+            return (double)intValue;
+
+        return double.TryParse(value.ToString(), out var result) ? result : 0.0;
+    }
+    #endregion
     #endregion
 }
