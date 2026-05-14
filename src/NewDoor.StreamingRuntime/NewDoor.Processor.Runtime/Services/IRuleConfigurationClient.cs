@@ -1,86 +1,76 @@
-using NewDoor.Platform.DTO.Features.RuleConfigurations.Models;
+using NewDoor.Platform.DTO.Features.Rules.Models;
 
 namespace NewDoor.Processor.Runtime.Services;
 
 public interface IRuleConfigurationClient
 {
-    Task<List<RuleConfigurationResponse>> GetAllRulesAsync(RuleConfigurationFilterRequest? filter = null, CancellationToken cancellationToken = default);
-    Task<List<RuleConfigurationResponse>> GetActiveRulesAsync(CancellationToken cancellationToken = default);
-    Task<List<RuleConfigurationResponse>> GetRulesByEventTypeAsync(string eventType, CancellationToken cancellationToken = default);
+    Task<List<RuleResponse>> GetAllRulesAsync(CancellationToken cancellationToken = default);
+    Task<List<RuleResponse>> GetActiveRulesAsync(CancellationToken cancellationToken = default);
+    Task<List<RuleResponse>> GetRulesByDeviceTypeAsync(string deviceType, CancellationToken cancellationToken = default);
 }
 
 public class RuleConfigurationClient : IRuleConfigurationClient
 {
+    #region Fields
     private readonly HttpClient _httpClient;
     private readonly ILogger<RuleConfigurationClient> _logger;
+    #endregion
 
+    #region Constructor
     public RuleConfigurationClient(HttpClient httpClient, ILogger<RuleConfigurationClient> logger)
     {
         _httpClient = httpClient;
         _logger = logger;
     }
+    #endregion
 
-    public async Task<List<RuleConfigurationResponse>> GetAllRulesAsync(RuleConfigurationFilterRequest? filter = null, CancellationToken cancellationToken = default)
+    #region Public Methods
+    public async Task<List<RuleResponse>> GetAllRulesAsync(CancellationToken cancellationToken = default)
     {
         try
         {
-            var queryParams = BuildQueryString(filter);
-            var response = await _httpClient.GetAsync($"api/ruleconfiguration/getall{queryParams}", cancellationToken);
+            var response = await _httpClient.GetAsync("api/rule/GetAll", cancellationToken);
 
             if (response.IsSuccessStatusCode)
             {
-                var rules = await response.Content.ReadFromJsonAsync<List<RuleConfigurationResponse>>(cancellationToken);
+                var rules = await response.Content.ReadFromJsonAsync<List<RuleResponse>>(cancellationToken);
                 _logger.LogInformation("Successfully fetched {Count} rules from API", rules?.Count ?? 0);
-                return rules ?? new List<RuleConfigurationResponse>();
+
+                // Log the actual rule data for debugging
+                if (rules != null && rules.Any())
+                {
+                    foreach (var rule in rules)
+                    {
+                        _logger.LogDebug("Rule loaded: ID={Id}, Type={RuleType}, DeviceType={DeviceType}, Threshold={Threshold}, Active={IsActive}", 
+                            rule.Id, rule.RuleType, rule.DeviceType, rule.ThresholdValue, rule.IsActive);
+                    }
+                }
+
+                return rules ?? new List<RuleResponse>();
             }
             else
             {
                 _logger.LogWarning("Failed to fetch rules from API. Status: {StatusCode}", response.StatusCode);
-                return new List<RuleConfigurationResponse>();
+                return new List<RuleResponse>();
             }
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error fetching rules from API");
-            return new List<RuleConfigurationResponse>();
+            return new List<RuleResponse>();
         }
     }
 
-    public async Task<List<RuleConfigurationResponse>> GetActiveRulesAsync(CancellationToken cancellationToken = default)
+    public async Task<List<RuleResponse>> GetActiveRulesAsync(CancellationToken cancellationToken = default)
     {
-        var filter = new RuleConfigurationFilterRequest { IsActive = true };
-        return await GetAllRulesAsync(filter, cancellationToken);
+        var allRules = await GetAllRulesAsync(cancellationToken);
+        return allRules.Where(r => r.IsActive).ToList();
     }
 
-    public async Task<List<RuleConfigurationResponse>> GetRulesByEventTypeAsync(string eventType, CancellationToken cancellationToken = default)
+    public async Task<List<RuleResponse>> GetRulesByDeviceTypeAsync(string deviceType, CancellationToken cancellationToken = default)
     {
-        var filter = new RuleConfigurationFilterRequest 
-        { 
-            EventType = eventType,
-            IsActive = true 
-        };
-        return await GetAllRulesAsync(filter, cancellationToken);
+        var allRules = await GetAllRulesAsync(cancellationToken);
+        return allRules.Where(r => r.IsActive && r.DeviceType == deviceType).ToList();
     }
-
-    private string BuildQueryString(RuleConfigurationFilterRequest? filter)
-    {
-        if (filter == null)
-            return string.Empty;
-
-        var queryParams = new List<string>();
-
-        if (filter.Id.HasValue)
-            queryParams.Add($"filter.Id={filter.Id.Value}");
-
-        if (filter.IsActive.HasValue)
-            queryParams.Add($"filter.IsActive={filter.IsActive.Value}");
-
-        if (!string.IsNullOrWhiteSpace(filter.EventType))
-            queryParams.Add($"filter.EventType={Uri.EscapeDataString(filter.EventType)}");
-
-        if (!string.IsNullOrWhiteSpace(filter.IncidentType))
-            queryParams.Add($"filter.IncidentType={Uri.EscapeDataString(filter.IncidentType)}");
-
-        return queryParams.Count > 0 ? "?" + string.Join("&", queryParams) : string.Empty;
-    }
+    #endregion
 }

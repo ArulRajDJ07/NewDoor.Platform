@@ -4,17 +4,15 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace NewDoor.Workflow.Orchestrator.BackgroundServices;
 
-/// <summary>
-/// Consumes processing results from Processor service
-/// This creates the back-and-forth communication pattern:
-/// Orchestrator → Processor → Orchestrator
-/// </summary>
 public class ProcessingResultConsumerService : BackgroundService
 {
+    #region Fields
     private readonly IKafkaConsumer _kafkaConsumer;
     private readonly IConfiguration _configuration;
     private readonly ILogger<ProcessingResultConsumerService> _logger;
+    #endregion
 
+    #region Constructor
     public ProcessingResultConsumerService(
         [FromKeyedServices("ResultConsumer")] IKafkaConsumer kafkaConsumer,
         IConfiguration configuration,
@@ -24,27 +22,29 @@ public class ProcessingResultConsumerService : BackgroundService
         _configuration = configuration;
         _logger = logger;
     }
+    #endregion
 
+    #region BackgroundService
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         try
         {
             var topic = _configuration["Kafka:RuntimeResultTopic"] ?? "newdoor.runtime.result";
-            _logger.LogInformation("Starting Processing Result Consumer Service for topic: {Topic}", topic);
+            _logger.LogInformation("Starting consumer: {Topic}", topic);
 
             await _kafkaConsumer.StartConsumingAsync(topic, stoppingToken);
         }
         catch (Exception ex)
         {
-            _logger.LogCritical(ex, "Processing Result Consumer Service failed");
+            _logger.LogCritical(ex, "Consumer failed");
             throw;
         }
     }
 
     public override async Task StopAsync(CancellationToken cancellationToken)
     {
-        _logger.LogInformation("Stopping Processing Result Consumer Service");
         await _kafkaConsumer.StopConsumingAsync();
         await base.StopAsync(cancellationToken);
     }
+    #endregion
 }

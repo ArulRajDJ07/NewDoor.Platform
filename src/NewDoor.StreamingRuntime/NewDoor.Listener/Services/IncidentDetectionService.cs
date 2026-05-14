@@ -68,8 +68,7 @@ public class IncidentDetectionService : IIncidentDetectionService
 
         if (incident != null)
         {
-            _logger.LogWarning("Incident detected: Type={IncidentType}, Severity={Severity}, DeviceId={DeviceId}, Description={Description}", 
-                incident.IncidentType, incident.Severity, incident.DeviceId, incident.Description);
+            _logger.LogWarning("Incident: {IncidentType} - Severity: {Severity}", incident.IncidentType, incident.Severity);
         }
 
         return Task.FromResult(incident);

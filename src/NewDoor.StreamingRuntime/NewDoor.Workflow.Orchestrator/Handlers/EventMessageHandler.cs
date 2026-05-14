@@ -4,17 +4,15 @@ using NewDoor.Workflow.Orchestrator.Models;
 
 namespace NewDoor.Workflow.Orchestrator.Handlers;
 
-/// <summary>
-/// Handles incoming runtime telemetry events from Listener
-/// Publishes to processing topic for Processor to consume
-/// This is the first step in the orchestration workflow
-/// </summary>
-public class EventMessageHandler : IKafkaMessageHandler<RuntimeTelemetryEvent>
+public class EventMessageHandler : IKafkaMessageHandler<EnrichedWorkflowEvent>
 {
+    #region Fields
     private readonly IKafkaProducer _kafkaProducer;
     private readonly IConfiguration _configuration;
     private readonly ILogger<EventMessageHandler> _logger;
+    #endregion
 
+    #region Constructor
     public EventMessageHandler(
         IKafkaProducer kafkaProducer,
         IConfiguration configuration,
@@ -24,34 +22,51 @@ public class EventMessageHandler : IKafkaMessageHandler<RuntimeTelemetryEvent>
         _configuration = configuration;
         _logger = logger;
     }
+    #endregion
 
-    public async Task HandleAsync(string key, RuntimeTelemetryEvent message, CancellationToken cancellationToken)
+    #region Handler
+    public async Task HandleAsync(string key, EnrichedWorkflowEvent message, CancellationToken cancellationToken)
     {
         try
         {
-            _logger.LogInformation("=== Orchestrator: Event Received === EventId={EventId}, DeviceId={DeviceId}, CorrelationId={CorrelationId}", 
-                message.EventId, message.DeviceId, message.CorrelationId);
+            // Map EnrichedWorkflowEvent to RuntimeTelemetryEvent
+            var runtimeEvent = new RuntimeTelemetryEvent
+            {
+                EventId = message.EventId,
+                CorrelationId = message.CorrelationId,
+                DeviceId = message.Device.DeviceId,
+                DeviceName = message.Device.DeviceName,
+                DeviceType = message.Device.DeviceType, // ← THIS WAS MISSING!
+                BuildingId = message.Location.BuildingId,
+                BuildingCode = message.Location.BuildingCode,
+                Floor = message.Location.Floor,
+                Zone = message.Location.Zone,
+                EventType = message.EventType,
+                TimestampUtc = message.Metadata.NormalizedUtc,
+                Temperature = message.Telemetry.Temperature,
+                SmokeLevel = message.Telemetry.SmokeLevel,
+                BatteryLevel = message.Telemetry.BatteryLevel,
+                Source = message.Metadata.ReceivedBy
+            };
 
-            // Create processing request for Processor service
             var processorRequest = new ProcessorRequest
             {
-                CorrelationId = message.CorrelationId,
-                Event = message,
+                CorrelationId = runtimeEvent.CorrelationId,
+                Event = runtimeEvent,
                 RequestedAtUtc = DateTime.UtcNow
             };
 
-            // Publish to processing topic for Processor to consume
-            var processingTopic = _configuration["Kafka:RuntimeProcessingTopic"] ?? "newdoor.runtime.processing";
-            await _kafkaProducer.PublishAsync(processingTopic, message.DeviceId, processorRequest, cancellationToken);
+            _logger.LogDebug("Sending event to processor - DeviceId: {DeviceId}, DeviceType: {DeviceType}, SmokeLevel: {SmokeLevel}, Temperature: {Temperature}", 
+                runtimeEvent.DeviceId, runtimeEvent.DeviceType, runtimeEvent.SmokeLevel, runtimeEvent.Temperature);
 
-            _logger.LogInformation("→ Published to processing topic: {Topic}, RequestId={RequestId}, CorrelationId={CorrelationId}", 
-                processingTopic, processorRequest.RequestId, message.CorrelationId);
+            var processingTopic = _configuration["Kafka:RuntimeProcessingTopic"] ?? "newdoor.runtime.processing";
+            await _kafkaProducer.PublishAsync(processingTopic, runtimeEvent.DeviceId, processorRequest, cancellationToken);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error handling runtime event: EventId={EventId}, DeviceId={DeviceId}", 
-                message.EventId, message.DeviceId);
+            _logger.LogError(ex, "Error handling event");
             throw;
         }
     }
+    #endregion
 }

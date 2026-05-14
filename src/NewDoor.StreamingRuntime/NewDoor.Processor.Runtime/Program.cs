@@ -67,6 +67,9 @@ namespace NewDoor.Processor.Runtime
                 // Register rule configuration cache as singleton
                 builder.Services.AddSingleton<IRuleConfigurationCache, RuleConfigurationCache>();
 
+                // Event history cache for false alarm reduction
+                builder.Services.AddSingleton<IEventHistoryCache, EventHistoryCache>();
+
                 // Register business services
                 builder.Services.AddSingleton<IEventProcessorService, EventProcessorService>();
 
@@ -105,6 +108,7 @@ namespace NewDoor.Processor.Runtime
 
                 // Register background service
                 builder.Services.AddHostedService<ProcessingRequestConsumerService>();
+                builder.Services.AddHostedService<EventHistoryCleaner>();
 
                 builder.WebHost.AddApplicationConfiguration<ApplicationSettings>();
                 builder.Services.AddPlatformServices(builder.Configuration);

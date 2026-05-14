@@ -5,17 +5,16 @@ using NewDoor.Workflow.Orchestrator.Services;
 
 namespace NewDoor.Workflow.Orchestrator.Handlers;
 
-/// <summary>
-/// Handles processing results from Processor service
-/// Continues the workflow after receiving analysis results
-/// </summary>
 public class ProcessingResultMessageHandler : IKafkaMessageHandler<ProcessorResponse>
 {
+    #region Fields
     private readonly IActionDispatcherClient _actionDispatcherClient;
     private readonly IKafkaProducer _kafkaProducer;
     private readonly IConfiguration _configuration;
     private readonly ILogger<ProcessingResultMessageHandler> _logger;
+    #endregion
 
+    #region Constructor
     public ProcessingResultMessageHandler(
         IActionDispatcherClient actionDispatcherClient,
         IKafkaProducer kafkaProducer,
@@ -27,51 +26,99 @@ public class ProcessingResultMessageHandler : IKafkaMessageHandler<ProcessorResp
         _configuration = configuration;
         _logger = logger;
     }
+    #endregion
 
+    #region Handler
     public async Task HandleAsync(string key, ProcessorResponse processorResponse, CancellationToken cancellationToken)
     {
         try
         {
-            _logger.LogInformation("=== Processing Result Received === ResponseId={ResponseId}, CorrelationId={CorrelationId}",
-                processorResponse.ResponseId, processorResponse.CorrelationId);
-
-            // Step 1: Publish audit history
-            await PublishAuditHistoryAsync(processorResponse, cancellationToken);
-
-            // Step 2: Dispatch actions if incident or alarm detected
-            if (processorResponse.IsIncident || processorResponse.IsAlarm)
-            {
-                await DispatchActionsAsync(processorResponse, cancellationToken);
-
-                // Step 3: Publish incident event
-                if (processorResponse.IsIncident)
-                {
-                    await PublishIncidentAsync(processorResponse, cancellationToken);
-                }
-
-                // Step 4: Publish alarm event
-                if (processorResponse.IsAlarm)
-                {
-                    await PublishAlarmAsync(processorResponse, cancellationToken);
-                }
-            }
-
-            _logger.LogInformation("=== Processing Result Handling Completed === ResponseId={ResponseId}, IsIncident={IsIncident}, IsAlarm={IsAlarm}",
-                processorResponse.ResponseId, processorResponse.IsIncident, processorResponse.IsAlarm);
+            _logger.LogInformation("Processing result: {EventType}", processorResponse.EventType);
+            await ClassifyAndRouteAsync(processorResponse, cancellationToken);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error handling processing result: ResponseId={ResponseId}, CorrelationId={CorrelationId}",
-                processorResponse.ResponseId, processorResponse.CorrelationId);
+            _logger.LogError(ex, "Error handling result");
             throw;
         }
     }
+    #endregion
 
+    #region Routing
+    private async Task ClassifyAndRouteAsync(ProcessorResponse processorResponse, CancellationToken cancellationToken)
+    {
+        switch (processorResponse.EventType.ToLowerInvariant())
+        {
+            case "incident":
+                await HandleIncidentEventAsync(processorResponse, cancellationToken);
+                break;
+            case "alarm":
+                await HandleAlarmEventAsync(processorResponse, cancellationToken);
+                break;
+            case "audit":
+                break;
+            case "notification":
+                await HandleNotificationEventAsync(processorResponse, cancellationToken);
+                break;
+            case "escalation":
+                await HandleEscalationEventAsync(processorResponse, cancellationToken);
+                break;
+            case "workflow":
+                await HandleWorkflowEventAsync(processorResponse, cancellationToken);
+                break;
+            default:
+                if (processorResponse.IsIncident || processorResponse.IsAlarm)
+                {
+                    await HandleIncidentOrAlarmAsync(processorResponse, cancellationToken);
+                }
+                break;
+        }
+    }
+
+    private async Task HandleIncidentEventAsync(ProcessorResponse processorResponse, CancellationToken cancellationToken)
+    {
+        await PublishIncidentAsync(processorResponse, cancellationToken);
+        await DispatchActionsAsync(processorResponse, cancellationToken);
+    }
+
+    private async Task HandleAlarmEventAsync(ProcessorResponse processorResponse, CancellationToken cancellationToken)
+    {
+        await PublishAlarmAsync(processorResponse, cancellationToken);
+        await DispatchActionsAsync(processorResponse, cancellationToken);
+    }
+
+    private async Task HandleNotificationEventAsync(ProcessorResponse processorResponse, CancellationToken cancellationToken)
+    {
+        await DispatchActionsAsync(processorResponse, cancellationToken);
+    }
+
+    private async Task HandleEscalationEventAsync(ProcessorResponse processorResponse, CancellationToken cancellationToken)
+    {
+        await PublishIncidentAsync(processorResponse, cancellationToken);
+        await PublishAlarmAsync(processorResponse, cancellationToken);
+        await DispatchActionsAsync(processorResponse, cancellationToken);
+    }
+
+    private async Task HandleWorkflowEventAsync(ProcessorResponse processorResponse, CancellationToken cancellationToken)
+    {
+        await DispatchActionsAsync(processorResponse, cancellationToken);
+    }
+
+    private async Task HandleIncidentOrAlarmAsync(ProcessorResponse processorResponse, CancellationToken cancellationToken)
+    {
+        await DispatchActionsAsync(processorResponse, cancellationToken);
+
+        if (processorResponse.IsIncident)
+            await PublishIncidentAsync(processorResponse, cancellationToken);
+
+        if (processorResponse.IsAlarm)
+            await PublishAlarmAsync(processorResponse, cancellationToken);
+    }
+    #endregion
+
+    #region Action Dispatch
     private async Task DispatchActionsAsync(ProcessorResponse processorResponse, CancellationToken cancellationToken)
     {
-        _logger.LogInformation("→ Dispatching actions - IncidentType={IncidentType}, Severity={Severity}",
-            processorResponse.IncidentType, processorResponse.Severity);
-
         var actionRequest = new ActionDispatchRequest
         {
             CorrelationId = processorResponse.CorrelationId,
@@ -92,10 +139,7 @@ public class ProcessingResultMessageHandler : IKafkaMessageHandler<ProcessorResp
             }
         };
 
-        var response = await _actionDispatcherClient.DispatchActionAsync(actionRequest, cancellationToken);
-
-        _logger.LogInformation("← Actions dispatched - DispatchId={DispatchId}, Status={Status}",
-            response.DispatchId, response.Status);
+        await _actionDispatcherClient.DispatchActionAsync(actionRequest, cancellationToken);
     }
 
     private string DetermineActionType(ProcessorResponse processorResponse)
@@ -115,40 +159,11 @@ public class ProcessingResultMessageHandler : IKafkaMessageHandler<ProcessorResp
 
         return "Notification";
     }
+    #endregion
 
-    private async Task PublishAuditHistoryAsync(ProcessorResponse processorResponse, CancellationToken cancellationToken)
-    {
-        _logger.LogInformation("→ Publishing Audit History - ResponseId={ResponseId}", processorResponse.ResponseId);
-
-        var auditEvent = new AuditHistoryEvent
-        {
-            CorrelationId = processorResponse.CorrelationId,
-            EventType = "ProcessingResult",
-            DeviceId = processorResponse.AdditionalData.GetValueOrDefault("DeviceId", "").ToString() ?? "",
-            EntityType = "ProcessorResponse",
-            EntityId = processorResponse.ResponseId,
-            Action = "Processed",
-            Details = $"Processing result received: IsIncident={processorResponse.IsIncident}, Severity={processorResponse.Severity}",
-            CreatedAtUtc = DateTime.UtcNow,
-            Metadata = new Dictionary<string, object>
-            {
-                { "IncidentType", processorResponse.IncidentType },
-                { "Severity", processorResponse.Severity },
-                { "ConfidenceScore", processorResponse.ConfidenceScore },
-                { "RuleTriggered", processorResponse.RuleTriggered }
-            }
-        };
-
-        var auditTopic = _configuration["Kafka:AuditHistoryTopic"] ?? "newdoor.audit.history";
-        await _kafkaProducer.PublishAsync(auditTopic, auditEvent.DeviceId, auditEvent, cancellationToken);
-
-        _logger.LogInformation("← Audit History Published - AuditId={AuditId}, Topic={Topic}",
-            auditEvent.AuditId, auditTopic);
-    }
-
+    #region Publishing
     private async Task PublishIncidentAsync(ProcessorResponse processorResponse, CancellationToken cancellationToken)
     {
-        _logger.LogInformation("→ Publishing Incident Event - IncidentType={IncidentType}", processorResponse.IncidentType);
 
         var incidentEvent = new IncidentEvent
         {
@@ -174,14 +189,10 @@ public class ProcessingResultMessageHandler : IKafkaMessageHandler<ProcessorResp
 
         var incidentTopic = _configuration["Kafka:IncidentDetectedTopic"] ?? "newdoor.incident.detected";
         await _kafkaProducer.PublishAsync(incidentTopic, incidentEvent.DeviceId, incidentEvent, cancellationToken);
-
-        _logger.LogInformation("← Incident Event Published - IncidentId={IncidentId}, Topic={Topic}",
-            incidentEvent.IncidentId, incidentTopic);
     }
 
     private async Task PublishAlarmAsync(ProcessorResponse processorResponse, CancellationToken cancellationToken)
     {
-        _logger.LogInformation("→ Publishing Alarm Event - AlarmType={AlarmType}", processorResponse.IncidentType);
 
         var buildingCode = processorResponse.AdditionalData.GetValueOrDefault("BuildingCode", "").ToString() ?? "";
         var floor = processorResponse.AdditionalData.GetValueOrDefault("Floor", "").ToString() ?? "";
@@ -211,8 +222,6 @@ public class ProcessingResultMessageHandler : IKafkaMessageHandler<ProcessorResp
 
         var alarmTopic = _configuration["Kafka:AlarmTriggeredTopic"] ?? "newdoor.alarm.triggered";
         await _kafkaProducer.PublishAsync(alarmTopic, alarmEvent.DeviceId, alarmEvent, cancellationToken);
-
-        _logger.LogInformation("← Alarm Event Published - AlarmId={AlarmId}, Topic={Topic}",
-            alarmEvent.AlarmId, alarmTopic);
     }
+    #endregion
 }

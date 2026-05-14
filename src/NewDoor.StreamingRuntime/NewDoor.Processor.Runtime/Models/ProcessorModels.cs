@@ -34,6 +34,7 @@ public class ProcessorResponse
     public string ResponseId { get; set; } = Guid.NewGuid().ToString();
     public string RequestId { get; set; } = string.Empty;
     public string CorrelationId { get; set; } = string.Empty;
+    public string EventType { get; set; } = string.Empty; // incident, alarm, audit, notification, escalation, workflow
     public bool IsIncident { get; set; }
     public bool IsAlarm { get; set; }
     public string IncidentType { get; set; } = string.Empty;

@@ -1,4 +1,4 @@
-using NewDoor.Platform.DTO.Features.RuleConfigurations.Models;
+using NewDoor.Platform.DTO.Features.Rules.Models;
 using System.Collections.Concurrent;
 
 namespace NewDoor.Processor.Runtime.Services;
@@ -7,31 +7,36 @@ public interface IRuleConfigurationCache
 {
     Task InitializeAsync(CancellationToken cancellationToken = default);
     Task RefreshAsync(CancellationToken cancellationToken = default);
-    List<RuleConfigurationResponse> GetActiveRules();
-    List<RuleConfigurationResponse> GetRulesByEventType(string eventType);
-    RuleConfigurationResponse? GetRuleById(int id);
+    List<RuleResponse> GetActiveRules();
+    List<RuleResponse> GetRulesByDeviceType(string deviceType);
+    RuleResponse? GetRuleById(int id);
 }
 
 public class RuleConfigurationCache : IRuleConfigurationCache
 {
+    #region Fields
     private readonly IRuleConfigurationClient _client;
     private readonly ILogger<RuleConfigurationCache> _logger;
-    private readonly ConcurrentDictionary<int, RuleConfigurationResponse> _rulesById;
-    private readonly ConcurrentDictionary<string, List<RuleConfigurationResponse>> _rulesByEventType;
-    private List<RuleConfigurationResponse> _activeRules;
+    private readonly ConcurrentDictionary<int, RuleResponse> _rulesById;
+    private readonly ConcurrentDictionary<string, List<RuleResponse>> _rulesByDeviceType;
+    private List<RuleResponse> _activeRules;
     private DateTime _lastRefreshUtc;
     private readonly SemaphoreSlim _refreshLock = new SemaphoreSlim(1, 1);
+    #endregion
 
+    #region Constructor
     public RuleConfigurationCache(IRuleConfigurationClient client, ILogger<RuleConfigurationCache> logger)
     {
         _client = client;
         _logger = logger;
-        _rulesById = new ConcurrentDictionary<int, RuleConfigurationResponse>();
-        _rulesByEventType = new ConcurrentDictionary<string, List<RuleConfigurationResponse>>();
-        _activeRules = new List<RuleConfigurationResponse>();
+        _rulesById = new ConcurrentDictionary<int, RuleResponse>();
+        _rulesByDeviceType = new ConcurrentDictionary<string, List<RuleResponse>>();
+        _activeRules = new List<RuleResponse>();
         _lastRefreshUtc = DateTime.MinValue;
     }
+    #endregion
 
+    #region Public Methods
     public async Task InitializeAsync(CancellationToken cancellationToken = default)
     {
         _logger.LogInformation("Initializing RuleConfigurationCache...");
@@ -45,39 +50,36 @@ public class RuleConfigurationCache : IRuleConfigurationCache
         {
             _logger.LogInformation("Refreshing rule configurations from API...");
 
-            var rules = await _client.GetAllRulesAsync(null, cancellationToken);
+            var rules = await _client.GetAllRulesAsync(cancellationToken);
 
             if (rules != null && rules.Any())
             {
-                // Clear existing caches
                 _rulesById.Clear();
-                _rulesByEventType.Clear();
+                _rulesByDeviceType.Clear();
 
-                // Populate caches
                 foreach (var rule in rules)
                 {
                     _rulesById[rule.Id] = rule;
 
-                    if (!_rulesByEventType.ContainsKey(rule.EventType))
+                    if (!_rulesByDeviceType.ContainsKey(rule.DeviceType))
                     {
-                        _rulesByEventType[rule.EventType] = new List<RuleConfigurationResponse>();
+                        _rulesByDeviceType[rule.DeviceType] = new List<RuleResponse>();
                     }
-                    _rulesByEventType[rule.EventType].Add(rule);
+                    _rulesByDeviceType[rule.DeviceType].Add(rule);
                 }
 
-                // Update active rules (sorted by priority descending)
                 _activeRules = rules
                     .Where(r => r.IsActive)
-                    .OrderByDescending(r => r.Priority)
+                    .OrderBy(r => r.RuleType)
                     .ToList();
 
                 _lastRefreshUtc = DateTime.UtcNow;
 
                 _logger.LogInformation(
-                    "Successfully refreshed {TotalRules} rules ({ActiveRules} active, {EventTypes} event types)",
+                    "Successfully refreshed {TotalRules} rules ({ActiveRules} active, {DeviceTypes} device types)",
                     rules.Count,
                     _activeRules.Count,
-                    _rulesByEventType.Count);
+                    _rulesByDeviceType.Count);
             }
             else
             {
@@ -94,23 +96,24 @@ public class RuleConfigurationCache : IRuleConfigurationCache
         }
     }
 
-    public List<RuleConfigurationResponse> GetActiveRules()
+    public List<RuleResponse> GetActiveRules()
     {
         return _activeRules.ToList();
     }
 
-    public List<RuleConfigurationResponse> GetRulesByEventType(string eventType)
+    public List<RuleResponse> GetRulesByDeviceType(string deviceType)
     {
-        if (_rulesByEventType.TryGetValue(eventType, out var rules))
+        if (_rulesByDeviceType.TryGetValue(deviceType, out var rules))
         {
-            return rules.Where(r => r.IsActive).OrderByDescending(r => r.Priority).ToList();
+            return rules.Where(r => r.IsActive).ToList();
         }
-        return new List<RuleConfigurationResponse>();
+        return new List<RuleResponse>();
     }
 
-    public RuleConfigurationResponse? GetRuleById(int id)
+    public RuleResponse? GetRuleById(int id)
     {
         _rulesById.TryGetValue(id, out var rule);
         return rule;
     }
+    #endregion
 }

@@ -82,7 +82,7 @@ namespace NewDoor.Workflow.Orchestrator
 
                 #region Runtime Event Consumer (from Listener)
 
-                builder.Services.AddSingleton<IKafkaMessageHandler<RuntimeTelemetryEvent>, EventMessageHandler>();
+                builder.Services.AddSingleton<IKafkaMessageHandler<EnrichedWorkflowEvent>, EventMessageHandler>();
                 builder.Services.AddKeyedSingleton<IKafkaConsumer>("EventConsumer", (sp, key) =>
                 {
                     var consumerConfig = new KafkaConsumerConfig
@@ -92,9 +92,9 @@ namespace NewDoor.Workflow.Orchestrator
                         Password = sp.GetRequiredService<IConfiguration>()["Kafka:Password"] ?? "",
                         GroupId = sp.GetRequiredService<IConfiguration>()["Kafka:RuntimeEventConsumerGroupId"] ?? "workflow-orchestrator-event-group"
                     };
-                    var handler = sp.GetRequiredService<IKafkaMessageHandler<RuntimeTelemetryEvent>>();
-                    var logger = sp.GetRequiredService<ILogger<KafkaConsumer<RuntimeTelemetryEvent>>>();
-                    return new KafkaConsumer<RuntimeTelemetryEvent>(consumerConfig, handler, logger);
+                    var handler = sp.GetRequiredService<IKafkaMessageHandler<EnrichedWorkflowEvent>>();
+                    var logger = sp.GetRequiredService<ILogger<KafkaConsumer<EnrichedWorkflowEvent>>>();
+                    return new KafkaConsumer<EnrichedWorkflowEvent>(consumerConfig, handler, logger);
                 });
 
                 #endregion

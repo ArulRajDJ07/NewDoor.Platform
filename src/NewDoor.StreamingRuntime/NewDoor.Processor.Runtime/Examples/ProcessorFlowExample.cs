@@ -45,7 +45,9 @@ public class ProcessorFlowExample
         // - Alarm Detection: Triggers alarm (Critical severity)
 
         var logger = Microsoft.Extensions.Logging.Abstractions.NullLogger<EventProcessorService>.Instance;
-        var processor = new EventProcessorService(logger, null!);
+        var historyLogger = Microsoft.Extensions.Logging.Abstractions.NullLogger<EventHistoryCache>.Instance;
+        var eventHistory = new EventHistoryCache(historyLogger);
+        var processor = new EventProcessorService(logger, null!, eventHistory);
         var response = await processor.ProcessAsync(processorRequest, CancellationToken.None);
 
         // 3. Create audit history record
@@ -121,7 +123,9 @@ public class ProcessorFlowExample
         };
 
         var logger = Microsoft.Extensions.Logging.Abstractions.NullLogger<EventProcessorService>.Instance;
-        var processor = new EventProcessorService(logger, null!);
+        var historyLogger = Microsoft.Extensions.Logging.Abstractions.NullLogger<EventHistoryCache>.Instance;
+        var eventHistory = new EventHistoryCache(historyLogger);
+        var processor = new EventProcessorService(logger, null!, eventHistory);
         var response = await processor.ProcessAsync(processorRequest, CancellationToken.None);
 
         var auditRecord = new AuditHistoryRecord
@@ -190,7 +194,9 @@ public class ProcessorFlowExample
         };
 
         var logger = Microsoft.Extensions.Logging.Abstractions.NullLogger<EventProcessorService>.Instance;
-        var processor = new EventProcessorService(logger, null!);
+        var historyLogger = Microsoft.Extensions.Logging.Abstractions.NullLogger<EventHistoryCache>.Instance;
+        var eventHistory = new EventHistoryCache(historyLogger);
+        var processor = new EventProcessorService(logger, null!, eventHistory);
         var response = await processor.ProcessAsync(processorRequest, CancellationToken.None);
 
         var auditRecord = new AuditHistoryRecord

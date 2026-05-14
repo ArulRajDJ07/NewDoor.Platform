@@ -7,9 +7,12 @@ namespace NewDoor.API.Handlers;
 
 public class UIBroadcastMessageHandler : IKafkaMessageHandler<UIBroadcastEvent>
 {
+    #region Fields
     private readonly IHubContext<NotificationHub> _hubContext;
     private readonly ILogger<UIBroadcastMessageHandler> _logger;
+    #endregion
 
+    #region Constructor
     public UIBroadcastMessageHandler(
         IHubContext<NotificationHub> hubContext,
         ILogger<UIBroadcastMessageHandler> logger)
@@ -17,49 +20,24 @@ public class UIBroadcastMessageHandler : IKafkaMessageHandler<UIBroadcastEvent>
         _hubContext = hubContext;
         _logger = logger;
     }
+    #endregion
 
+    #region Handler
     public async Task HandleAsync(string key, UIBroadcastEvent message, CancellationToken cancellationToken)
     {
         try
         {
-            _logger.LogInformation("Handling UI broadcast: BroadcastId={BroadcastId}, EventType={EventType}, DeviceId={DeviceId}", 
-                message.BroadcastId, message.EventType, message.DeviceId);
-
-            LogAlarmData(message);
-            LogIncidentData(message);
             await BroadcastToClientsAsync(message, cancellationToken);
-
-            _logger.LogInformation("UI broadcast handled successfully: BroadcastId={BroadcastId}", message.BroadcastId);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error handling UI broadcast: BroadcastId={BroadcastId}", message.BroadcastId);
+            _logger.LogError(ex, "Error broadcasting to UI");
             throw;
         }
     }
+    #endregion
 
-    private void LogAlarmData(UIBroadcastEvent broadcastEvent)
-    {
-        _logger.LogInformation(
-            "ALARM DATA - DeviceId={DeviceId}, Type={EventType}, Severity={Severity}, Message={Message}, Timestamp={Timestamp}", 
-            broadcastEvent.DeviceId, 
-            broadcastEvent.EventType, 
-            broadcastEvent.Severity, 
-            broadcastEvent.Message, 
-            broadcastEvent.Timestamp);
-    }
-
-    private void LogIncidentData(UIBroadcastEvent broadcastEvent)
-    {
-        _logger.LogInformation(
-            "INCIDENT DATA - DeviceId={DeviceId}, Type={EventType}, Severity={Severity}, BuildingId={BuildingId}, Location={Location}", 
-            broadcastEvent.DeviceId, 
-            broadcastEvent.EventType, 
-            broadcastEvent.Severity, 
-            broadcastEvent.BuildingId,
-            $"{broadcastEvent.BuildingCode}/{broadcastEvent.Floor}/{broadcastEvent.Zone}");
-    }
-
+    #region Private Methods
     private async Task BroadcastToClientsAsync(UIBroadcastEvent broadcastEvent, CancellationToken cancellationToken)
     {
         var dashboardAlert = new DashboardAlert
@@ -82,9 +60,6 @@ public class UIBroadcastMessageHandler : IKafkaMessageHandler<UIBroadcastEvent>
             var groupName = $"Building_{broadcastEvent.BuildingId}";
             await _hubContext.Clients.Group(groupName).SendAsync("ReceiveAlert", dashboardAlert, cancellationToken);
         }
-
-        _logger.LogInformation("Alert broadcast via SignalR: AlertId={AlertId}, Severity={Severity}", 
-            dashboardAlert.AlertId, dashboardAlert.Severity);
     }
+    #endregion
 }
-
