@@ -1,10 +1,10 @@
 using NewDoor.Processor.Runtime.Models;
 using NewDoor.Processor.Runtime.Services;
 
-namespace NewDoor.Processor.Runtime.Tests;
+namespace NewDoor.Processor.Runtime.Examples;
 
 /// <summary>
-/// Example test demonstrating the processor flow
+/// Example demonstrating the processor flow
 /// This shows how events are processed through the pipeline
 /// </summary>
 public class ProcessorFlowExample
@@ -22,7 +22,7 @@ public class ProcessorFlowExample
                 EventId = "evt-" + Guid.NewGuid(),
                 DeviceId = "DEV-001",
                 DeviceName = "Smoke Detector - Floor 3",
-                DeviceType = "SmokeDetector",
+                DeviceType = "SmokeSensor",
                 BuildingId = 1,
                 BuildingCode = "BLD-001",
                 Floor = "3",

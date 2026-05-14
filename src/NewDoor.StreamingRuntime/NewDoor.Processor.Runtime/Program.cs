@@ -56,12 +56,25 @@ namespace NewDoor.Processor.Runtime
                 builder.Services.AddSwaggerGen();
 
                 // Register HttpClient for RuleConfigurationClient
-                builder.Services.AddHttpClient<IRuleConfigurationClient, RuleConfigurationClient>(client =>
+                // Note: Authentication is currently disabled for internal service-to-service calls
+      
+                builder.Services.AddHttpClient<RuleConfigurationClient>(client =>
                 {
                     var apiBaseUrl = builder.Configuration["ApiSettings:NewDoorApiBaseUrl"] 
                         ?? "https://newdoor-api.azurewebsites.net";
                     client.BaseAddress = new Uri(apiBaseUrl);
                     client.Timeout = TimeSpan.FromSeconds(30);
+                })
+                .SetHandlerLifetime(TimeSpan.FromMinutes(5)); // Prevent socket exhaustion
+                // .AddApiAuthentication(builder.Configuration);  // TODO: P2 : enable authentication
+
+                // Explicitly register as Singleton to match RuleConfigurationCache lifetime
+                builder.Services.AddSingleton<IRuleConfigurationClient>(sp =>
+                {
+                    var httpClientFactory = sp.GetRequiredService<IHttpClientFactory>();
+                    var logger = sp.GetRequiredService<ILogger<RuleConfigurationClient>>();
+                    var httpClient = httpClientFactory.CreateClient(nameof(RuleConfigurationClient));
+                    return new RuleConfigurationClient(httpClient, logger);
                 });
 
                 // Register rule configuration cache as singleton
@@ -116,12 +129,9 @@ namespace NewDoor.Processor.Runtime
                 var app = builder.Build();
 
                 // Initialize rule configuration cache
-                using (var scope = app.Services.CreateScope())
-                {
-                    var ruleCache = scope.ServiceProvider.GetRequiredService<IRuleConfigurationCache>();
-                    await ruleCache.InitializeAsync();
-                    Log.Information("Rule configuration cache initialized successfully");
-                }
+                var ruleCache = app.Services.GetRequiredService<IRuleConfigurationCache>();
+                await ruleCache.InitializeAsync();
+                Log.Information("Rule configuration cache initialized successfully");
 
                 app.UseSwagger();
                 app.UseSwaggerUI();

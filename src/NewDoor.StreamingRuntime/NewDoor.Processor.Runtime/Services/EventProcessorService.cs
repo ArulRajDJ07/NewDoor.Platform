@@ -221,7 +221,15 @@ public class EventProcessorService : IEventProcessorService
             return;
         }
 
-        if (response.IncidentType == "Fire")
+        // If severity was already set by a rule, respect it
+        if (!string.IsNullOrEmpty(response.Severity))
+        {
+            _logger.LogDebug("Severity already set by rule: {Severity}", response.Severity);
+            return;
+        }
+
+        // Fallback severity calculation for rules that don't specify severity
+        if (response.IncidentType == "Fire" || response.IncidentType == "SmokeDetection")
         {
             if (telemetryEvent.SmokeLevel > 80 || telemetryEvent.Temperature > 80)
             {

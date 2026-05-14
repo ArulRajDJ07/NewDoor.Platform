@@ -27,9 +27,10 @@ public class RuleConfigurationClient : IRuleConfigurationClient
     #region Public Methods
     public async Task<List<RuleResponse>> GetAllRulesAsync(CancellationToken cancellationToken = default)
     {
+        _logger.LogInformation("GetAllRulesAsync called - Fetching all rules from API");
         try
         {
-            var response = await _httpClient.GetAsync("api/rule/GetAll", cancellationToken);
+            var response = await _httpClient.GetAsync("api/rule/getall", cancellationToken);
 
             if (response.IsSuccessStatusCode)
             {
