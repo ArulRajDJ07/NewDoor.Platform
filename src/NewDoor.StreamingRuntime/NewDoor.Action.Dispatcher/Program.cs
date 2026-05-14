@@ -75,10 +75,56 @@ namespace NewDoor.Action.Dispatcher
                     };
                 });
 
+                #region Kafka Producer
+
                 builder.Services.AddSingleton<IKafkaProducer, KafkaProducer>();
+
+                #endregion
+
+                #region Alarm Consumer (from newdoor.alarm.triggered)
+
                 builder.Services.AddSingleton<IKafkaMessageHandler<AlarmEvent>, AlarmMessageHandler>();
-                builder.Services.AddSingleton<IKafkaConsumer, KafkaConsumer<AlarmEvent>>();
+                builder.Services.AddKeyedSingleton<IKafkaConsumer>("AlarmConsumer", (sp, key) =>
+                {
+                    var consumerConfig = new KafkaConsumerConfig
+                    {
+                        BootstrapServers = sp.GetRequiredService<IConfiguration>()["Kafka:BootstrapServers"] ?? "localhost:9092",
+                        Username = sp.GetRequiredService<IConfiguration>()["Kafka:Username"] ?? "",
+                        Password = sp.GetRequiredService<IConfiguration>()["Kafka:Password"] ?? "",
+                        GroupId = sp.GetRequiredService<IConfiguration>()["Kafka:AlarmConsumerGroupId"] ?? "action-dispatcher-alarm-group"
+                    };
+                    var handler = sp.GetRequiredService<IKafkaMessageHandler<AlarmEvent>>();
+                    var logger = sp.GetRequiredService<ILogger<KafkaConsumer<AlarmEvent>>>();
+                    return new KafkaConsumer<AlarmEvent>(consumerConfig, handler, logger);
+                });
+
+                #endregion
+
+                #region Incident Consumer (from newdoor.incident.detected)
+
+                builder.Services.AddSingleton<IKafkaMessageHandler<IncidentEvent>, IncidentMessageHandler>();
+                builder.Services.AddKeyedSingleton<IKafkaConsumer>("IncidentConsumer", (sp, key) =>
+                {
+                    var consumerConfig = new KafkaConsumerConfig
+                    {
+                        BootstrapServers = sp.GetRequiredService<IConfiguration>()["Kafka:BootstrapServers"] ?? "localhost:9092",
+                        Username = sp.GetRequiredService<IConfiguration>()["Kafka:Username"] ?? "",
+                        Password = sp.GetRequiredService<IConfiguration>()["Kafka:Password"] ?? "",
+                        GroupId = sp.GetRequiredService<IConfiguration>()["Kafka:IncidentConsumerGroupId"] ?? "action-dispatcher-incident-group"
+                    };
+                    var handler = sp.GetRequiredService<IKafkaMessageHandler<IncidentEvent>>();
+                    var logger = sp.GetRequiredService<ILogger<KafkaConsumer<IncidentEvent>>>();
+                    return new KafkaConsumer<IncidentEvent>(consumerConfig, handler, logger);
+                });
+
+                #endregion
+
+                #region Background Services
+
                 builder.Services.AddHostedService<AlarmConsumerService>();
+                builder.Services.AddHostedService<IncidentConsumerService>();
+
+                #endregion
 
                 builder.WebHost.AddApplicationConfiguration<ApplicationSettings>();
                 builder.Services.AddPlatformServices(builder.Configuration);

@@ -70,9 +70,27 @@ namespace NewDoor.API
                     };
                 });
 
+                // Register Kafka message handlers and consumers using KEYED SERVICE PATTERN
+
+                // UI Broadcast Consumer
                 builder.Services.AddSingleton<IKafkaMessageHandler<UIBroadcastEvent>, UIBroadcastMessageHandler>();
-                builder.Services.AddSingleton<IKafkaConsumer, KafkaConsumer<UIBroadcastEvent>>();
+                builder.Services.AddKeyedSingleton<IKafkaConsumer, KafkaConsumer<UIBroadcastEvent>>("UIBroadcast");
                 builder.Services.AddHostedService<UIBroadcastConsumerService>();
+
+                // Incident Created Consumer
+                builder.Services.AddSingleton<IKafkaMessageHandler<IncidentCreatedEvent>, IncidentCreatedMessageHandler>();
+                builder.Services.AddKeyedSingleton<IKafkaConsumer, KafkaConsumer<IncidentCreatedEvent>>("IncidentCreated");
+                builder.Services.AddHostedService<IncidentCreatedConsumerService>();
+
+                // Alarm Created Consumer
+                builder.Services.AddSingleton<IKafkaMessageHandler<AlarmCreatedEvent>, AlarmCreatedMessageHandler>();
+                builder.Services.AddKeyedSingleton<IKafkaConsumer, KafkaConsumer<AlarmCreatedEvent>>("AlarmCreated");
+                builder.Services.AddHostedService<AlarmCreatedConsumerService>();
+
+                // Audit History Consumer
+                builder.Services.AddSingleton<IKafkaMessageHandler<AuditHistoryEvent>, AuditHistoryMessageHandler>();
+                builder.Services.AddKeyedSingleton<IKafkaConsumer, KafkaConsumer<AuditHistoryEvent>>("AuditHistory");
+                builder.Services.AddHostedService<AuditHistoryConsumerService>();
 
                 builder.WebHost.AddApplicationConfiguration<ApplicationSettings>();
 

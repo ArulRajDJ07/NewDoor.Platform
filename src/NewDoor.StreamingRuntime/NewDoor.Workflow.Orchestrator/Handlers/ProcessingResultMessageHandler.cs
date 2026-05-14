@@ -29,21 +29,11 @@ public class ProcessingResultMessageHandler : IKafkaMessageHandler<ProcessorResp
     {
         try
         {
-            _logger.LogInformation("=== Received ProcessorResponse from newdoor.runtime.result ===");
-            _logger.LogInformation("Key: {Key}", key);
-            _logger.LogInformation("CorrelationId: {CorrelationId}", processorResponse.CorrelationId);
-            _logger.LogInformation("EventType: {EventType}", processorResponse.EventType);
-            _logger.LogInformation("IsIncident: {IsIncident}, IsAlarm: {IsAlarm}", processorResponse.IsIncident, processorResponse.IsAlarm);
-            _logger.LogInformation("Severity: {Severity}, IncidentType: {IncidentType}", processorResponse.Severity, processorResponse.IncidentType);
-            _logger.LogInformation("========================================================");
-
             await ClassifyAndRouteAsync(processorResponse, cancellationToken);
-
-            _logger.LogInformation("Successfully processed ProcessorResponse: {CorrelationId}", processorResponse.CorrelationId);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error handling ProcessorResponse: CorrelationId={CorrelationId}", processorResponse.CorrelationId);
+            _logger.LogError(ex, "Error handling ProcessorResponse: {CorrelationId}", processorResponse.CorrelationId);
             throw;
         }
     }
@@ -149,7 +139,6 @@ public class ProcessingResultMessageHandler : IKafkaMessageHandler<ProcessorResp
             };
 
             var incidentTopic = _configuration["Kafka:IncidentDetectedTopic"] ?? "newdoor.incident.detected";
-            _logger.LogInformation("Publishing incident to topic: {Topic}, DeviceId: {DeviceId}", incidentTopic, incidentEvent.DeviceId);
             await _kafkaProducer.PublishAsync(incidentTopic, incidentEvent.DeviceId, incidentEvent, cancellationToken);
         }
         catch (Exception ex)
@@ -166,6 +155,10 @@ public class ProcessingResultMessageHandler : IKafkaMessageHandler<ProcessorResp
             var buildingCode = GetStringValue(processorResponse.AdditionalData, "BuildingCode");
             var floor = GetStringValue(processorResponse.AdditionalData, "Floor");
             var zone = GetStringValue(processorResponse.AdditionalData, "Zone");
+
+            // TODO: For production, map RuleTriggered name to RuleId via API/cache lookup
+            // For hackathon: use fallback RuleId=1 (create a default "System Rule" in database)
+            var ruleId = MapRuleNameToId(processorResponse.RuleTriggered);
 
             var alarmEvent = new AlarmEvent
             {
@@ -184,13 +177,14 @@ public class ProcessingResultMessageHandler : IKafkaMessageHandler<ProcessorResp
                 {
                     { "Temperature", GetDoubleValue(processorResponse.AdditionalData, "Temperature") },
                     { "SmokeLevel", GetDoubleValue(processorResponse.AdditionalData, "SmokeLevel") },
+                    { "RuleId", ruleId },
+                    { "RuleName", processorResponse.RuleTriggered ?? "Unknown" },
                     { "RuleTriggered", processorResponse.RuleTriggered ?? "" },
                     { "ConfidenceScore", processorResponse.ConfidenceScore }
                 }
             };
 
             var alarmTopic = _configuration["Kafka:AlarmTriggeredTopic"] ?? "newdoor.alarm.triggered";
-            _logger.LogInformation("Publishing alarm to topic: {Topic}, DeviceId: {DeviceId}", alarmTopic, alarmEvent.DeviceId);
             await _kafkaProducer.PublishAsync(alarmTopic, alarmEvent.DeviceId, alarmEvent, cancellationToken);
         }
         catch (Exception ex)
@@ -198,6 +192,24 @@ public class ProcessingResultMessageHandler : IKafkaMessageHandler<ProcessorResp
             _logger.LogError(ex, "Error publishing alarm for CorrelationId: {CorrelationId}", processorResponse.CorrelationId);
             throw;
         }
+    }
+
+    private int MapRuleNameToId(string? ruleName)
+    {
+        // Hackathon fallback: Default RuleId = 1
+        // TODO: Implement proper lookup via API or cache
+        // Example: Fire Detection -> RuleId=1, Smoke Alarm -> RuleId=2, etc.
+        if (string.IsNullOrEmpty(ruleName))
+            return 1;
+
+        // Simple mapping for demo purposes
+        return ruleName.ToLowerInvariant() switch
+        {
+            "fire detection" => 1,
+            "smoke alarm" => 2,
+            "temperature threshold" => 3,
+            _ => 1 // Default fallback
+        };
     }
 
     private async Task PublishAuditHistoryAsync(ProcessorResponse processorResponse, CancellationToken cancellationToken)

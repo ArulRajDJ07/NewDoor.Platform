@@ -4,19 +4,19 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace NewDoor.API.BackgroundServices;
 
-public class UIBroadcastConsumerService : BackgroundService
+public class AlarmCreatedConsumerService : BackgroundService
 {
     #region Fields
     private readonly IKafkaConsumer _kafkaConsumer;
     private readonly IConfiguration _configuration;
-    private readonly ILogger<UIBroadcastConsumerService> _logger;
+    private readonly ILogger<AlarmCreatedConsumerService> _logger;
     #endregion
 
     #region Constructor
-    public UIBroadcastConsumerService(
-        [FromKeyedServices("UIBroadcast")] IKafkaConsumer kafkaConsumer,
+    public AlarmCreatedConsumerService(
+        [FromKeyedServices("AlarmCreated")] IKafkaConsumer kafkaConsumer,
         IConfiguration configuration,
-        ILogger<UIBroadcastConsumerService> logger)
+        ILogger<AlarmCreatedConsumerService> logger)
     {
         _kafkaConsumer = kafkaConsumer;
         _configuration = configuration;
@@ -29,13 +29,13 @@ public class UIBroadcastConsumerService : BackgroundService
     {
         try
         {
-            var topic = _configuration["Kafka:UIBroadcastTopic"] ?? "newdoor.ui.broadcast";
-            _logger.LogInformation("Starting UIBroadcast consumer: {Topic}", topic);
+            var topic = _configuration["Kafka:AlarmCreatedTopic"] ?? "newdoor.alarm.created";
+            _logger.LogInformation("Starting AlarmCreated consumer: {Topic}", topic);
             await _kafkaConsumer.StartConsumingAsync(topic, stoppingToken);
         }
         catch (Exception ex)
         {
-            _logger.LogCritical(ex, "UIBroadcast consumer failed");
+            _logger.LogCritical(ex, "AlarmCreated consumer failed");
             throw;
         }
     }
