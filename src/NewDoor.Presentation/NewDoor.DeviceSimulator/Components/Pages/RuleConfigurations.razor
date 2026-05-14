@@ -1,0 +1,476 @@
+@page "/configuration/ruleconfigurations"
+@rendermode InteractiveServer
+@using NewDoor.DeviceSimulator.Services
+@using NewDoor.Platform.DTO.Features.RuleConfigurations.Models
+@inject ApiClientService ApiClient
+
+<PageTitle>Rule Configurations - Configuration</PageTitle>
+
+<div class="configuration-container">
+    <div class="page-header">
+        <h2>Rule Configurations</h2>
+        <button class="btn-refresh" @onclick="LoadRuleConfigurationsAsync">
+            <i class="fas fa-sync-alt"></i> Refresh
+        </button>
+    </div>
+
+    <div class="master-detail-layout">
+        <div class="list-panel">
+            <div class="list-header">
+                <h3>Configurations (@ruleConfigurations.Count)</h3>
+                <input type="text" placeholder="Search configurations..." @bind="searchText" @bind:event="oninput" class="search-input" />
+            </div>
+
+            @if (isLoading)
+            {
+                <div class="loading-state">Loading configurations...</div>
+            }
+            else if (!filteredConfigurations.Any())
+            {
+                <div class="empty-state">No configurations found.</div>
+            }
+            else
+            {
+                <div class="list-items">
+                    @foreach (var config in filteredConfigurations)
+                    {
+                        <div class="list-item @(selectedConfig?.Id == config.Id ? "selected" : "")" @onclick="() => SelectConfiguration(config)">
+                            <div class="item-header">
+                                <span class="item-name">@config.ConfigKey</span>
+                                <span class="badge badge-@(config.IsActive ? "active" : "inactive")">
+                                    @(config.IsActive ? "Active" : "Inactive")
+                                </span>
+                            </div>
+                            <div class="item-details">
+                                <span class="item-label">Rule ID:</span>
+                                <span class="item-value">@config.RuleId</span>
+                            </div>
+                            <div class="item-details">
+                                <span class="item-label">Value:</span>
+                                <span class="item-value">@config.ConfigValue @config.Unit</span>
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+
+        <div class="details-panel">
+            @if (selectedConfig == null)
+            {
+                <div class="no-selection">
+                    <i class="fas fa-sliders-h fa-3x"></i>
+                    <p>Select a configuration to view details</p>
+                </div>
+            }
+            else
+            {
+                <div class="details-content">
+                    <div class="details-header">
+                        <h3>@selectedConfig.ConfigKey</h3>
+                        <span class="badge badge-@(selectedConfig.IsActive ? "active" : "inactive") large">
+                            @(selectedConfig.IsActive ? "Active" : "Inactive")
+                        </span>
+                    </div>
+
+                    <div class="details-section">
+                        <h4>Configuration Information</h4>
+                        <div class="detail-grid">
+                            <div class="detail-item">
+                                <label>Configuration ID</label>
+                                <span>@selectedConfig.Id</span>
+                            </div>
+                            <div class="detail-item">
+                                <label>Rule ID</label>
+                                <span>@selectedConfig.RuleId</span>
+                            </div>
+                            <div class="detail-item">
+                                <label>Configuration Key</label>
+                                <span>@selectedConfig.ConfigKey</span>
+                            </div>
+                            <div class="detail-item">
+                                <label>Status</label>
+                                <span>@(selectedConfig.IsActive ? "Active" : "Inactive")</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="details-section">
+                        <h4>Value & Unit</h4>
+                        <div class="value-display">
+                            <div class="value-item">
+                                <label>Configuration Value</label>
+                                <div class="value-box">@selectedConfig.ConfigValue</div>
+                            </div>
+                            <div class="value-item">
+                                <label>Unit</label>
+                                <div class="unit-box">@(string.IsNullOrEmpty(selectedConfig.Unit) ? "N/A" : selectedConfig.Unit)</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="details-section">
+                        <h4>Additional Information</h4>
+                        <div class="info-cards">
+                            <div class="info-card">
+                                <i class="fas fa-link"></i>
+                                <div class="info-content">
+                                    <span class="info-label">Linked Rule</span>
+                                    <span class="info-value">Rule #@selectedConfig.RuleId</span>
+                                </div>
+                            </div>
+                            <div class="info-card">
+                                <i class="fas fa-toggle-@(selectedConfig.IsActive ? "on" : "off")"></i>
+                                <div class="info-content">
+                                    <span class="info-label">Status</span>
+                                    <span class="info-value">@(selectedConfig.IsActive ? "Active Configuration" : "Inactive Configuration")</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+@code {
+    private List<RuleConfigurationResponse> ruleConfigurations = new();
+    private RuleConfigurationResponse? selectedConfig = null;
+    private string searchText = "";
+    private bool isLoading = true;
+
+    private List<RuleConfigurationResponse> filteredConfigurations => ruleConfigurations
+        .Where(c => string.IsNullOrEmpty(searchText) ||
+                    c.ConfigKey.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
+                    c.ConfigValue.Contains(searchText, StringComparison.OrdinalIgnoreCase))
+        .OrderBy(c => c.RuleId)
+        .ThenBy(c => c.ConfigKey)
+        .ToList();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadRuleConfigurationsAsync();
+    }
+
+    private async Task LoadRuleConfigurationsAsync()
+    {
+        isLoading = true;
+        StateHasChanged();
+        ruleConfigurations = await ApiClient.GetAllRuleConfigurationsAsync();
+        isLoading = false;
+        StateHasChanged();
+    }
+
+    private void SelectConfiguration(RuleConfigurationResponse config)
+    {
+        selectedConfig = config;
+        StateHasChanged();
+    }
+}
+
+<style>
+    .configuration-container {
+        padding: 20px;
+        background: #f5f5f5;
+        min-height: 100vh;
+    }
+
+    .page-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 20px;
+    }
+
+    .page-header h2 {
+        font-size: 24px;
+        font-weight: 700;
+        color: #333;
+        margin: 0;
+    }
+
+    .btn-refresh {
+        background: #0066cc;
+        color: white;
+        border: none;
+        padding: 10px 20px;
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 14px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .btn-refresh:hover {
+        background: #0052a3;
+    }
+
+    .master-detail-layout {
+        display: grid;
+        grid-template-columns: 400px 1fr;
+        gap: 20px;
+        height: calc(100vh - 120px);
+    }
+
+    .list-panel {
+        background: white;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+    }
+
+    .list-header {
+        padding: 20px;
+        border-bottom: 1px solid #e0e0e0;
+    }
+
+    .list-header h3 {
+        font-size: 18px;
+        font-weight: 700;
+        color: #333;
+        margin: 0 0 15px 0;
+    }
+
+    .search-input {
+        width: 100%;
+        padding: 10px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        font-size: 14px;
+    }
+
+    .list-items {
+        flex: 1;
+        overflow-y: auto;
+        padding: 10px;
+    }
+
+    .list-item {
+        padding: 15px;
+        margin-bottom: 8px;
+        border: 1px solid #e0e0e0;
+        border-radius: 6px;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+
+    .list-item:hover {
+        background: #f8f9fa;
+        border-color: #0066cc;
+    }
+
+    .list-item.selected {
+        background: #e3f2fd;
+        border-color: #0066cc;
+    }
+
+    .item-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 10px;
+    }
+
+    .item-name {
+        font-weight: 600;
+        color: #333;
+        font-size: 14px;
+    }
+
+    .item-details {
+        display: flex;
+        gap: 5px;
+        font-size: 12px;
+        color: #666;
+        margin-bottom: 5px;
+    }
+
+    .item-label {
+        font-weight: 600;
+    }
+
+    .details-panel {
+        background: white;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        overflow-y: auto;
+        padding: 20px;
+    }
+
+    .no-selection {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        height: 100%;
+        color: #999;
+    }
+
+    .no-selection i {
+        margin-bottom: 20px;
+    }
+
+    .details-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 30px;
+        padding-bottom: 20px;
+        border-bottom: 2px solid #e0e0e0;
+    }
+
+    .details-header h3 {
+        font-size: 22px;
+        font-weight: 700;
+        color: #333;
+        margin: 0;
+    }
+
+    .details-section {
+        margin-bottom: 30px;
+    }
+
+    .details-section h4 {
+        font-size: 16px;
+        font-weight: 600;
+        color: #666;
+        margin-bottom: 15px;
+    }
+
+    .detail-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 20px;
+    }
+
+    .detail-item {
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+    }
+
+    .detail-item label {
+        font-size: 12px;
+        font-weight: 600;
+        color: #666;
+        text-transform: uppercase;
+    }
+
+    .detail-item span {
+        font-size: 14px;
+        color: #333;
+    }
+
+    .value-display {
+        display: grid;
+        grid-template-columns: 2fr 1fr;
+        gap: 20px;
+    }
+
+    .value-item {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    .value-item label {
+        font-size: 12px;
+        font-weight: 600;
+        color: #666;
+        text-transform: uppercase;
+    }
+
+    .value-box {
+        padding: 20px;
+        background: #f8f9fa;
+        border: 2px solid #e0e0e0;
+        border-radius: 8px;
+        font-size: 18px;
+        font-weight: 600;
+        color: #0066cc;
+        text-align: center;
+    }
+
+    .unit-box {
+        padding: 20px;
+        background: #f8f9fa;
+        border: 2px solid #e0e0e0;
+        border-radius: 8px;
+        font-size: 16px;
+        font-weight: 600;
+        color: #666;
+        text-align: center;
+    }
+
+    .info-cards {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 15px;
+    }
+
+    .info-card {
+        display: flex;
+        align-items: center;
+        gap: 15px;
+        padding: 20px;
+        background: #f8f9fa;
+        border-radius: 8px;
+    }
+
+    .info-card i {
+        font-size: 24px;
+        color: #0066cc;
+    }
+
+    .info-content {
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+    }
+
+    .info-label {
+        font-size: 12px;
+        font-weight: 600;
+        color: #666;
+        text-transform: uppercase;
+    }
+
+    .info-value {
+        font-size: 14px;
+        color: #333;
+    }
+
+    .badge {
+        padding: 4px 8px;
+        border-radius: 4px;
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        display: inline-block;
+    }
+
+    .badge.large {
+        padding: 8px 16px;
+        font-size: 13px;
+    }
+
+    .badge-active {
+        background: #d1fae5;
+        color: #059669;
+    }
+
+    .badge-inactive {
+        background: #fee2e2;
+        color: #dc2626;
+    }
+
+    .loading-state, .empty-state {
+        text-align: center;
+        padding: 40px;
+        color: #666;
+    }
+</style>
