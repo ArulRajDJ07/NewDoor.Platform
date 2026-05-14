@@ -4,23 +4,23 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace NewDoor.Action.Dispatcher.BackgroundServices;
 
-public class AlarmConsumerService : BackgroundService
+public class IncidentConsumerService : BackgroundService
 {
     #region Fields
     private readonly IKafkaConsumer _kafkaConsumer;
     private readonly IConfiguration _configuration;
-    private readonly ILogger<AlarmConsumerService> _logger;
+    private readonly ILogger<IncidentConsumerService> _logger;
     #endregion
 
     #region Constructor
-    public AlarmConsumerService(
-        [FromKeyedServices("AlarmConsumer")] IKafkaConsumer kafkaConsumer,
+    public IncidentConsumerService(
+        [FromKeyedServices("IncidentConsumer")] IKafkaConsumer kafkaConsumer,
         IConfiguration configuration,
-        ILogger<AlarmConsumerService> logger)
+        ILogger<IncidentConsumerService> logger)
     {
-        _kafkaConsumer = kafkaConsumer;
-        _configuration = configuration;
-        _logger = logger;
+        _kafkaConsumer = kafkaConsumer ?? throw new ArgumentNullException(nameof(kafkaConsumer));
+        _configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
     #endregion
 
@@ -29,8 +29,8 @@ public class AlarmConsumerService : BackgroundService
     {
         try
         {
-            var topic = _configuration["Kafka:AlarmTriggeredTopic"] ?? "newdoor.alarm.triggered";
-            _logger.LogInformation("Alarm consumer started: {Topic}", topic);
+            var topic = _configuration["Kafka:IncidentDetectedTopic"] ?? "newdoor.incident.detected";
+            _logger.LogInformation("Incident consumer started: {Topic}", topic);
 
             await _kafkaConsumer.StartConsumingAsync(topic, stoppingToken);
 
@@ -46,7 +46,7 @@ public class AlarmConsumerService : BackgroundService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Alarm consumer failed");
+            _logger.LogError(ex, "Incident consumer failed");
             throw;
         }
     }
