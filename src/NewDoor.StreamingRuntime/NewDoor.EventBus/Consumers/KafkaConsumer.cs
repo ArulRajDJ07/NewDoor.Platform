@@ -57,42 +57,57 @@ public class KafkaConsumer<T> : IKafkaConsumer, IAsyncDisposable
     {
         try
         {
+            _logger.LogInformation("Starting consume loop for topic: {Topic}", topic);
+
             while (!cancellationToken.IsCancellationRequested)
             {
                 try
                 {
                     var consumeResult = _consumer.Consume(cancellationToken);
-                    
+
                     if (consumeResult?.Message == null)
                         continue;
 
-                    _logger.LogDebug("Consumed message: Topic={Topic}, Partition={Partition}, Offset={Offset}", 
-                        topic, consumeResult.Partition.Value, consumeResult.Offset.Value);
+                    _logger.LogInformation("Consumed message from Kafka: Topic={Topic}, Partition={Partition}, Offset={Offset}, Key={Key}", 
+                        topic, consumeResult.Partition.Value, consumeResult.Offset.Value, consumeResult.Message.Key);
 
                     var message = JsonSerializer.Deserialize<T>(consumeResult.Message.Value, _jsonOptions);
-                    
+
                     if (message != null)
                     {
+                        _logger.LogInformation("Message deserialized successfully, invoking handler for type {MessageType}", typeof(T).Name);
                         await _messageHandler.HandleAsync(consumeResult.Message.Key, message, cancellationToken);
                         _consumer.Commit(consumeResult);
+                        _logger.LogInformation("Message committed: Offset={Offset}", consumeResult.Offset.Value);
+                    }
+                    else
+                    {
+                        _logger.LogWarning("Message deserialized to null, skipping. Topic={Topic}, Offset={Offset}", topic, consumeResult.Offset.Value);
                     }
                 }
                 catch (ConsumeException ex)
                 {
                     _logger.LogError(ex, "Kafka consume error: {Reason}", ex.Error.Reason);
                 }
+                catch (JsonException ex)
+                {
+                    _logger.LogError(ex, "JSON deserialization error for message from topic {Topic}", topic);
+                }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, "Error processing Kafka message");
+                    _logger.LogError(ex, "Error processing Kafka message from topic {Topic}", topic);
                 }
             }
+
+            _logger.LogInformation("Consume loop ending for topic: {Topic}", topic);
         }
         catch (OperationCanceledException)
         {
-            _logger.LogInformation("Kafka consumer cancelled");
+            _logger.LogInformation("Kafka consumer cancelled for topic: {Topic}", topic);
         }
         finally
         {
+            _logger.LogInformation("Closing consumer for topic: {Topic}", topic);
             _consumer.Close();
         }
     }

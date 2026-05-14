@@ -1,44 +1,48 @@
 using NewDoor.EventBus.Consumers;
-using NewDoor.Workflow.Orchestrator.Models;
+using NewDoor.Processor.Runtime.Models;
 
-namespace NewDoor.Workflow.Orchestrator.BackgroundServices;
+namespace NewDoor.Processor.Runtime.BackgroundServices;
 
-public class RuntimeEventConsumerService : BackgroundService
+public class ProcessingRequestConsumerService : BackgroundService
 {
+    #region Fields
     private readonly IKafkaConsumer _kafkaConsumer;
     private readonly IConfiguration _configuration;
-    private readonly ILogger<RuntimeEventConsumerService> _logger;
+    private readonly ILogger<ProcessingRequestConsumerService> _logger;
+    #endregion
 
-    public RuntimeEventConsumerService(
+    #region Constructor
+    public ProcessingRequestConsumerService(
         IKafkaConsumer kafkaConsumer,
         IConfiguration configuration,
-        ILogger<RuntimeEventConsumerService> logger)
+        ILogger<ProcessingRequestConsumerService> logger)
     {
         _kafkaConsumer = kafkaConsumer;
         _configuration = configuration;
         _logger = logger;
     }
+    #endregion
 
+    #region BackgroundService
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         try
         {
-            var topic = _configuration["Kafka:RuntimeEventTopic"] ?? "newdoor.runtime.event";
-            _logger.LogInformation("Starting Runtime Event Consumer Service for topic: {Topic}", topic);
-
+            var topic = _configuration["Kafka:RuntimeProcessingTopic"] ?? "newdoor.runtime.processing";
+            _logger.LogInformation("Starting consumer: {Topic}", topic);
             await _kafkaConsumer.StartConsumingAsync(topic, stoppingToken);
         }
         catch (Exception ex)
         {
-            _logger.LogCritical(ex, "Runtime Event Consumer Service failed");
+            _logger.LogCritical(ex, "Consumer failed");
             throw;
         }
     }
 
     public override async Task StopAsync(CancellationToken cancellationToken)
     {
-        _logger.LogInformation("Stopping Runtime Event Consumer Service");
         await _kafkaConsumer.StopConsumingAsync();
         await base.StopAsync(cancellationToken);
     }
+    #endregion
 }

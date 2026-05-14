@@ -8,6 +8,11 @@ using DoWhatta.Platform.Infrastructure.HttpClients;
 using DoWhatta.Platform.Infrastructure.Messaging.ServiceBus;
 using NewDoor.Processor.Runtime.Settings;
 using NewDoor.Processor.Runtime.Services;
+using NewDoor.EventBus.Consumers;
+using NewDoor.EventBus.Producers;
+using NewDoor.Processor.Runtime.Models;
+using NewDoor.Processor.Runtime.Handlers;
+using NewDoor.Processor.Runtime.BackgroundServices;
 using Serilog;
 using ApplicationSettings = NewDoor.Processor.Runtime.Settings.ApplicationSettings;
 
@@ -15,7 +20,7 @@ namespace NewDoor.Processor.Runtime
 {
     public class Program
     {
-        public static void Main(string[] args)
+        public static async Task Main(string[] args)
         {
             try
             {
@@ -50,18 +55,86 @@ namespace NewDoor.Processor.Runtime
                 builder.Services.AddEndpointsApiExplorer();
                 builder.Services.AddSwaggerGen();
 
+                // Register HttpClient for RuleConfigurationClient
+                // Note: Authentication is currently disabled for internal service-to-service calls
+      
+                builder.Services.AddHttpClient<RuleConfigurationClient>(client =>
+                {
+                    var apiBaseUrl = builder.Configuration["ApiSettings:NewDoorApiBaseUrl"] 
+                        ?? "https://newdoor-api.azurewebsites.net";
+                    client.BaseAddress = new Uri(apiBaseUrl);
+                    client.Timeout = TimeSpan.FromSeconds(30);
+                })
+                .SetHandlerLifetime(TimeSpan.FromMinutes(5)); // Prevent socket exhaustion
+                // .AddApiAuthentication(builder.Configuration);  // TODO: P2 : enable authentication
+
+                // Explicitly register as Singleton to match RuleConfigurationCache lifetime
+                builder.Services.AddSingleton<IRuleConfigurationClient>(sp =>
+                {
+                    var httpClientFactory = sp.GetRequiredService<IHttpClientFactory>();
+                    var logger = sp.GetRequiredService<ILogger<RuleConfigurationClient>>();
+                    var httpClient = httpClientFactory.CreateClient(nameof(RuleConfigurationClient));
+                    return new RuleConfigurationClient(httpClient, logger);
+                });
+
+                // Register rule configuration cache as singleton
+                builder.Services.AddSingleton<IRuleConfigurationCache, RuleConfigurationCache>();
+
+                // Event history cache for false alarm reduction
+                builder.Services.AddSingleton<IEventHistoryCache, EventHistoryCache>();
+
+                // Register business services
                 builder.Services.AddSingleton<IEventProcessorService, EventProcessorService>();
+
+                // Register Kafka configuration
+                builder.Services.AddSingleton<KafkaConsumerConfig>(sp =>
+                {
+                    var config = sp.GetRequiredService<IConfiguration>();
+                    return new KafkaConsumerConfig
+                    {
+                        BootstrapServers = config["Kafka:BootstrapServers"] ?? "localhost:9092",
+                        Username = config["Kafka:Username"] ?? "",
+                        Password = config["Kafka:Password"] ?? "",
+                        GroupId = config["Kafka:GroupId"] ?? "processor-runtime-group"
+                    };
+                });
+
+                builder.Services.AddSingleton<KafkaProducerConfig>(sp =>
+                {
+                    var config = sp.GetRequiredService<IConfiguration>();
+                    return new KafkaProducerConfig
+                    {
+                        BootstrapServers = config["Kafka:BootstrapServers"] ?? "localhost:9092",
+                        Username = config["Kafka:Username"] ?? "",
+                        Password = config["Kafka:Password"] ?? "",
+                        MessageTimeoutMs = int.Parse(config["Kafka:MessageTimeoutMs"] ?? "30000"),
+                        RequestTimeoutMs = int.Parse(config["Kafka:RequestTimeoutMs"] ?? "30000")
+                    };
+                });
+
+                // Register Kafka producer
+                builder.Services.AddSingleton<IKafkaProducer, KafkaProducer>();
+
+                // Register Kafka consumer and handler
+                builder.Services.AddSingleton<IKafkaMessageHandler<ProcessorRequest>, ProcessingRequestMessageHandler>();
+                builder.Services.AddSingleton<IKafkaConsumer, KafkaConsumer<ProcessorRequest>>();
+
+                // Register background service
+                builder.Services.AddHostedService<ProcessingRequestConsumerService>();
+                builder.Services.AddHostedService<EventHistoryCleaner>();
 
                 builder.WebHost.AddApplicationConfiguration<ApplicationSettings>();
                 builder.Services.AddPlatformServices(builder.Configuration);
 
                 var app = builder.Build();
 
-                if (app.Environment.IsDevelopment())
-                {
-                    app.UseSwagger();
-                    app.UseSwaggerUI();
-                }
+                // Initialize rule configuration cache
+                var ruleCache = app.Services.GetRequiredService<IRuleConfigurationCache>();
+                await ruleCache.InitializeAsync();
+                Log.Information("Rule configuration cache initialized successfully");
+
+                app.UseSwagger();
+                app.UseSwaggerUI();
 
                 app.UseSerilogRequestLogging();
                 app.UseCors("AllowBlazorClient");

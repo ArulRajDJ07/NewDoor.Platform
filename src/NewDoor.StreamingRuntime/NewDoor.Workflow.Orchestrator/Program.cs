@@ -51,17 +51,7 @@ namespace NewDoor.Workflow.Orchestrator
                         });
                 });
 
-                builder.Services.AddSingleton<KafkaConsumerConfig>(sp =>
-                {
-                    var config = sp.GetRequiredService<IConfiguration>();
-                    return new KafkaConsumerConfig
-                    {
-                        BootstrapServers = config["Kafka:BootstrapServers"] ?? "localhost:9092",
-                        Username = config["Kafka:Username"] ?? "",
-                        Password = config["Kafka:Password"] ?? "",
-                        GroupId = config["Kafka:GroupId"] ?? "workflow-orchestrator-group"
-                    };
-                });
+                #region Kafka Configuration
 
                 builder.Services.AddSingleton<KafkaProducerConfig>(sp =>
                 {
@@ -76,11 +66,60 @@ namespace NewDoor.Workflow.Orchestrator
                     };
                 });
 
-                builder.Services.AddHttpClient<IProcessorClient, ProcessorClient>();
+                #endregion
+
+
+
+                #region Kafka Producer
+
                 builder.Services.AddSingleton<IKafkaProducer, KafkaProducer>();
-                builder.Services.AddSingleton<IKafkaMessageHandler<RuntimeTelemetryEvent>, RuntimeEventMessageHandler>();
-                builder.Services.AddSingleton<IKafkaConsumer, KafkaConsumer<RuntimeTelemetryEvent>>();
-                builder.Services.AddHostedService<RuntimeEventConsumerService>();
+
+                #endregion
+
+                #region Runtime Event Consumer (from Listener)
+
+                builder.Services.AddSingleton<IKafkaMessageHandler<EnrichedWorkflowEvent>, EventMessageHandler>();
+                builder.Services.AddKeyedSingleton<IKafkaConsumer>("EventConsumer", (sp, key) =>
+                {
+                    var consumerConfig = new KafkaConsumerConfig
+                    {
+                        BootstrapServers = sp.GetRequiredService<IConfiguration>()["Kafka:BootstrapServers"] ?? "localhost:9092",
+                        Username = sp.GetRequiredService<IConfiguration>()["Kafka:Username"] ?? "",
+                        Password = sp.GetRequiredService<IConfiguration>()["Kafka:Password"] ?? "",
+                        GroupId = sp.GetRequiredService<IConfiguration>()["Kafka:RuntimeEventConsumerGroupId"] ?? "workflow-orchestrator-event-group"
+                    };
+                    var handler = sp.GetRequiredService<IKafkaMessageHandler<EnrichedWorkflowEvent>>();
+                    var logger = sp.GetRequiredService<ILogger<KafkaConsumer<EnrichedWorkflowEvent>>>();
+                    return new KafkaConsumer<EnrichedWorkflowEvent>(consumerConfig, handler, logger);
+                });
+
+                #endregion
+
+                #region Processing Result Consumer (from Processor)
+
+                builder.Services.AddSingleton<IKafkaMessageHandler<ProcessorResponse>, ProcessingResultMessageHandler>();
+                builder.Services.AddKeyedSingleton<IKafkaConsumer>("ResultConsumer", (sp, key) =>
+                {
+                    var consumerConfig = new KafkaConsumerConfig
+                    {
+                        BootstrapServers = sp.GetRequiredService<IConfiguration>()["Kafka:BootstrapServers"] ?? "localhost:9092",
+                        Username = sp.GetRequiredService<IConfiguration>()["Kafka:Username"] ?? "",
+                        Password = sp.GetRequiredService<IConfiguration>()["Kafka:Password"] ?? "",
+                        GroupId = sp.GetRequiredService<IConfiguration>()["Kafka:ResultConsumerGroupId"] ?? "workflow-orchestrator-result-group"
+                    };
+                    var handler = sp.GetRequiredService<IKafkaMessageHandler<ProcessorResponse>>();
+                    var logger = sp.GetRequiredService<ILogger<KafkaConsumer<ProcessorResponse>>>();
+                    return new KafkaConsumer<ProcessorResponse>(consumerConfig, handler, logger);
+                });
+
+                #endregion
+
+                #region Background Services
+
+                builder.Services.AddHostedService<EventConsumerService>();
+                builder.Services.AddHostedService<ProcessingResultConsumerService>();
+
+                #endregion
 
                 builder.WebHost.AddApplicationConfiguration<ApplicationSettings>();
                 builder.Services.AddPlatformServices(builder.Configuration);

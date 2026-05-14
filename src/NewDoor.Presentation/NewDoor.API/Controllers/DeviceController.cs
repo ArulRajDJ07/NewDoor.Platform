@@ -12,6 +12,19 @@
         public async Task<List<DeviceResponse>> GetAll([FromQuery] DeviceFilterRequest? filter) =>
             await mediator.Send(new FindAllDeviceQuery(filter));
 
+        [HttpGet("GetById")]
+        public async Task<ActionResult<DeviceResponse>> GetById([FromQuery] string id)
+        {
+            var filter = new DeviceFilterRequest { DeviceId = id };
+            var devices = await mediator.Send(new FindAllDeviceQuery(filter));
+            var device = devices.FirstOrDefault();
+
+            if (device == null)
+                return NotFound(new { message = $"Device with ID '{id}' not found" });
+
+            return Ok(device);
+        }
+
         [HttpPost]
         public async Task<DeviceResponse> Create([FromBody] AddDeviceRequest request) =>
             await mediator.Send(new AddDeviceCommand(request));

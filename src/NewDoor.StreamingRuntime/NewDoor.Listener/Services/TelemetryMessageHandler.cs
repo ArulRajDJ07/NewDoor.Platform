@@ -6,62 +6,91 @@ namespace NewDoor.Listener.Services;
 
 public class TelemetryMessageHandler : IKafkaMessageHandler<EnrichedTelemetryEvent>
 {
+    #region Fields
+    private readonly IEventEnrichmentService _enrichmentService;
     private readonly IIncidentDetectionService _incidentDetectionService;
     private readonly IKafkaProducer _kafkaProducer;
     private readonly IConfiguration _configuration;
     private readonly ILogger<TelemetryMessageHandler> _logger;
+    #endregion
 
+    #region Constructor
     public TelemetryMessageHandler(
+        IEventEnrichmentService enrichmentService,
         IIncidentDetectionService incidentDetectionService,
         IKafkaProducer kafkaProducer,
         IConfiguration configuration,
         ILogger<TelemetryMessageHandler> logger)
     {
+        _enrichmentService = enrichmentService;
         _incidentDetectionService = incidentDetectionService;
         _kafkaProducer = kafkaProducer;
         _configuration = configuration;
         _logger = logger;
     }
+    #endregion
 
+    #region Handler
     public async Task HandleAsync(string key, EnrichedTelemetryEvent message, CancellationToken cancellationToken)
     {
         try
         {
-            _logger.LogInformation("Processing telemetry: EventId={EventId}, DeviceId={DeviceId}, EventType={EventType}", 
-                message.EventId, message.DeviceId, message.EventType);
-
-            var runtimeEvent = new RuntimeTelemetryEvent
+            var eventCategory = _enrichmentService.DetermineEventCategory(message.EventType);
+            var pipeline = _enrichmentService.DeterminePipeline(eventCategory);
+            var priority = _enrichmentService.DeterminePriority(
+                message.EventType, 
+                message.Payload.SmokeLevel, 
+                message.Payload.Temperature);
+            var enrichedEvent = new EnrichedWorkflowEvent
             {
                 EventId = message.EventId,
                 CorrelationId = message.CorrelationId,
-                DeviceId = message.DeviceId,
-                DeviceName = message.DeviceName,
-                DeviceType = message.DeviceType,
-                BuildingId = message.BuildingId,
-                BuildingCode = message.BuildingCode,
-                Floor = message.Floor,
-                Zone = message.Zone,
                 EventType = message.EventType,
-                TimestampUtc = message.TimestampUtc,
-                Temperature = message.Payload.Temperature,
-                SmokeLevel = message.Payload.SmokeLevel,
-                BatteryLevel = message.Payload.BatteryLevel,
-                SignalStrength = message.Payload.SignalStrength,
-                Status = message.Payload.Status,
-                Source = "NewDoor.Listener"
+                EventCategory = eventCategory,
+
+                Device = new DeviceInfo
+                {
+                    DeviceId = message.DeviceId,
+                    DeviceType = message.DeviceType,
+                    DeviceName = message.DeviceName
+                },
+
+                Location = new LocationInfo
+                {
+                    BuildingId = message.BuildingId,
+                    BuildingCode = message.BuildingCode,
+                    Floor = message.Floor,
+                    Zone = message.Zone
+                },
+
+                Telemetry = new TelemetryData
+                {
+                    Temperature = message.Payload.Temperature,
+                    SmokeLevel = message.Payload.SmokeLevel,
+                    BatteryLevel = message.Payload.BatteryLevel
+                },
+
+                Runtime = new RuntimeInfo
+                {
+                    Pipeline = pipeline,
+                    Priority = priority
+                },
+
+                Metadata = new EventMetadata
+                {
+                    ReceivedBy = "NewDoor.Listener",
+                    NormalizedUtc = DateTime.UtcNow
+                }
             };
 
-            var runtimeTopic = _configuration["Kafka:RuntimeEventTopic"] ?? "newdoor.runtime.event";
-            await _kafkaProducer.PublishAsync(runtimeTopic, runtimeEvent.DeviceId, runtimeEvent, cancellationToken);
-
-            _logger.LogInformation("Published runtime event to Workflow Orchestrator: EventId={EventId}, Topic={Topic}", 
-                runtimeEvent.EventId, runtimeTopic);
+            var workflowTopic = _configuration["Kafka:WorkflowEventTopic"] ?? "newdoor.workflow.events";
+            await _kafkaProducer.PublishAsync(workflowTopic, enrichedEvent.Device.DeviceId, enrichedEvent, cancellationToken);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error handling telemetry message: EventId={EventId}, DeviceId={DeviceId}", 
-                message.EventId, message.DeviceId);
+            _logger.LogError(ex, "Error handling telemetry");
             throw;
         }
     }
+    #endregion
 }

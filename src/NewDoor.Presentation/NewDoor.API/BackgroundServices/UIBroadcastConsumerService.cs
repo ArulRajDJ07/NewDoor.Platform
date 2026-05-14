@@ -5,10 +5,13 @@ namespace NewDoor.API.BackgroundServices;
 
 public class UIBroadcastConsumerService : BackgroundService
 {
+    #region Fields
     private readonly IKafkaConsumer _kafkaConsumer;
     private readonly IConfiguration _configuration;
     private readonly ILogger<UIBroadcastConsumerService> _logger;
+    #endregion
 
+    #region Constructor
     public UIBroadcastConsumerService(
         IKafkaConsumer kafkaConsumer,
         IConfiguration configuration,
@@ -18,27 +21,28 @@ public class UIBroadcastConsumerService : BackgroundService
         _configuration = configuration;
         _logger = logger;
     }
+    #endregion
 
+    #region BackgroundService
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         try
         {
             var topic = _configuration["Kafka:UIBroadcastTopic"] ?? "newdoor.ui.broadcast";
-            _logger.LogInformation("Starting UI Broadcast Consumer Service for topic: {Topic}", topic);
-
+            _logger.LogInformation("Starting consumer: {Topic}", topic);
             await _kafkaConsumer.StartConsumingAsync(topic, stoppingToken);
         }
         catch (Exception ex)
         {
-            _logger.LogCritical(ex, "UI Broadcast Consumer Service failed");
+            _logger.LogCritical(ex, "Consumer failed");
             throw;
         }
     }
 
     public override async Task StopAsync(CancellationToken cancellationToken)
     {
-        _logger.LogInformation("Stopping UI Broadcast Consumer Service");
         await _kafkaConsumer.StopConsumingAsync();
         await base.StopAsync(cancellationToken);
     }
+    #endregion
 }

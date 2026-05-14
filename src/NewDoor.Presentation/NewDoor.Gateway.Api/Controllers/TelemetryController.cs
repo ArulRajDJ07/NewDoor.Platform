@@ -31,7 +31,7 @@ public class TelemetryController : ControllerBase
     {
         try
         {
-            _logger.LogInformation("Received telemetry: DeviceId={DeviceId}, EventType={EventType}", 
+            _logger.LogDebug("Received telemetry: DeviceId={DeviceId}, EventType={EventType}", 
                 request.DeviceId, request.EventType);
 
             var enrichedEvent = await _enrichmentService.EnrichTelemetryAsync(request);
@@ -39,7 +39,7 @@ public class TelemetryController : ControllerBase
             var topic = _configuration["Kafka:TelemetryTopic"] ?? "newdoor.device.telemetry";
             await _kafkaProducer.PublishAsync(topic, request.DeviceId, enrichedEvent);
 
-            _logger.LogInformation("Published enriched telemetry to Kafka: EventId={EventId}, Topic={Topic}", 
+            _logger.LogDebug("Published enriched telemetry to Kafka: EventId={EventId}, Topic={Topic}", 
                 enrichedEvent.EventId, topic);
 
             return Accepted(new { eventId = enrichedEvent.EventId, status = "queued" });
@@ -66,7 +66,7 @@ public class TelemetryController : ControllerBase
     {
         try
         {
-            _logger.LogInformation("Received batch telemetry: Count={Count}", requests.Count);
+            _logger.LogDebug("Received batch telemetry: Count={Count}", requests.Count);
 
             var enrichedEvents = new List<(string Key, EnrichedTelemetryEvent Message)>();
 
@@ -79,7 +79,7 @@ public class TelemetryController : ControllerBase
             var topic = _configuration["Kafka:TelemetryTopic"] ?? "newdoor.device.telemetry";
             await _kafkaProducer.PublishBatchAsync(topic, enrichedEvents);
 
-            _logger.LogInformation("Published batch telemetry to Kafka: Count={Count}, Topic={Topic}", 
+            _logger.LogDebug("Published batch telemetry to Kafka: Count={Count}, Topic={Topic}", 
                 enrichedEvents.Count, topic);
 
             return Accepted(new { count = enrichedEvents.Count, status = "queued" });

@@ -11,6 +11,13 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Remove="Settings\**" />
+    <Content Remove="Settings\**" />
+    <EmbeddedResource Remove="Settings\**" />
+    <None Remove="Settings\**" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="8.0.11" />
   </ItemGroup>
   <ItemGroup>
@@ -39,12 +46,6 @@
   <ItemGroup>
     <ProjectReference Include="..\..\NewDoor.StreamingRuntime\NewDoor.EventBus\NewDoor.EventBus.csproj" />
     <ProjectReference Include="..\..\NewDoor.PlatformShared\NewDoor.Platform.DTO\NewDoor.Platform.DTO.csproj" />
-  </ItemGroup>
-
-
-
-  <ItemGroup>
-    <Folder Include="Settings\" />
   </ItemGroup>
 
 </Project>

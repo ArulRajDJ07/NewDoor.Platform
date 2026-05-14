@@ -56,8 +56,14 @@ namespace NewDoor.Gateway.Api
                 // Register Event Bus Producer (Kafka/ServiceBus) - automatically selects based on appsettings.json
                 builder.Services.AddEventBusProducer(builder.Configuration);
 
-                // Add Device Enrichment Service
-                builder.Services.AddSingleton<IDeviceEnrichmentService, DeviceEnrichmentService>();
+                // Add HttpClient for Device Enrichment Service
+                builder.Services.AddHttpClient<IDeviceEnrichmentService, DeviceEnrichmentService>(client =>
+                {
+                    var apiBaseUrl = builder.Configuration["ApiSettings:NewDoorApiBaseUrl"] ?? "https://localhost:7192/";
+                    client.BaseAddress = new Uri(apiBaseUrl);
+                    client.Timeout = TimeSpan.FromSeconds(10);
+                })
+                .SetHandlerLifetime(TimeSpan.FromMinutes(5));
 
                 var app = builder.Build();
 
