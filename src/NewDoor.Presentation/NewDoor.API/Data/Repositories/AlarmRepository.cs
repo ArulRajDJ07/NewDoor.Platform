@@ -42,4 +42,9 @@
 
             return await query.ToListAsync();
         }
+
+        public async Task<Alarm?> GetByAlarmCodeAsync(string alarmCode)
+        {
+            return await DbSet.AsNoTracking().FirstOrDefaultAsync(a => a.AlarmCode == alarmCode);
+        }
     }

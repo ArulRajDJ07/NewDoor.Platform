@@ -7,6 +7,7 @@
 @inject SimulationEngineService SimulationEngine
 @inject EventBufferService EventBuffer
 @inject SignalRService SignalRService
+@inject ApiClientService ApiClient
 @implements IAsyncDisposable
 
 <PageTitle>Dashboard - Live Monitoring</PageTitle>
@@ -23,100 +24,129 @@
         <div class="live-monitoring-section">
             <div class="section-header">
                 <div class="header-left">
-                    <h3> LIVE MONITORING</h3>
+                    <h3>LIVE MONITORING</h3>
                     <span class="connection-badge @GetConnectionClass()">
                         @GetConnectionText()
                     </span>
                 </div>
                 <div class="header-right">
-                    <div class="live-stats">
-                        <span class="stat-item">
-                            <i class="fas fa-bell"></i> Alarms: <strong>@liveAlarms.Count</strong>
-                        </span>
-                        <span class="stat-item">
-                            <i class="fas fa-fire"></i> Incidents: <strong>@liveIncidents.Count</strong>
-                        </span>
-                    </div>
+                    <span class="stat-badge">
+                        Alarms: <strong>@liveAlarms.Count</strong>
+                    </span>
+                    <span class="stat-badge">
+                        Incidents: <strong>@liveIncidents.Count</strong>
+                    </span>
                 </div>
             </div>
 
-            <div class="live-updates-grid">
-                <!-- Recent Alarms Column -->
-                <div class="live-column">
-                    <div class="column-header alarm-header">
-                        <i class="fas fa-bell"></i> Alarms
+            <div class="grid-container">
+                <!-- Alarms Grid -->
+                <div class="grid-panel">
+                    <div class="grid-header alarms-header">
+                        <span>Alarms</span>
                     </div>
-                    <div class="column-content">
-                        @if (!liveAlarms.Any())
-                        {
-                            <div class="empty-state">No alarms yet</div>
-                        }
-                        else
-                        {
-                            @foreach (var alarm in liveAlarms.Take(5))
-                            {
-                                <div class="live-item @(alarm.IsNew ? "new-item" : "")">
-                                    <div class="item-header">
-                                        <span class="severity-badge @GetSeverityClass(alarm.Alert.Severity)">
-                                            @alarm.Alert.Severity
-                                        </span>
-                                        <span class="timestamp">@GetRelativeTime(alarm.ReceivedAt)</span>
-                                    </div>
-                                    <div class="item-body">
-                                        <div class="item-title">@alarm.Alert.AlertId</div>
-                                        <div class="item-message">@alarm.Alert.Message</div>
-                                        <div class="item-location">
-                                            📍 @alarm.Alert.BuildingCode - @alarm.Alert.Location
-                                        </div>
-                                    </div>
-                                </div>
-                            }
-                        }
-                    </div>
-                </div>
-
-                <!-- Recent Incidents Column -->
-                <div class="live-column">
-                    <div class="column-header incident-header">
-                        <i class="fas fa-fire"></i> Incidents
-                    </div>
-                    <div class="column-content">
-                        @if (!liveIncidents.Any())
-                        {
-                            <div class="empty-state">No incidents yet</div>
-                        }
-                        else
-                        {
-                            @foreach (var incident in liveIncidents.Take(5))
-                            {
-                                <div class="live-item @(incident.IsNew ? "new-item" : "")">
-                                    <div class="item-header">
-                                        <span class="severity-badge @GetSeverityClass(incident.Alert.Severity)">
-                                            @incident.Alert.Severity
-                                        </span>
-                                        <span class="timestamp">@GetRelativeTime(incident.ReceivedAt)</span>
-                                    </div>
-                                    <div class="item-body">
-                                        <div class="item-title">@incident.Alert.AlertId</div>
-                                        <div class="item-message">@incident.Alert.Message</div>
-                                        <div class="item-location">
-                                            📍 @incident.Alert.BuildingCode - @incident.Alert.Location
-                                        </div>
-                                    </div>
-                                </div>
-                            }
-                        }
+                    <div class="grid-table">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Device ID</th>
+                                    <th>Building</th>
+                                    <th>Message</th>
+                                    <th>Severity</th>
+                                    <th>Status</th>
+                                    <th>Time</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @if (!liveAlarms.Any())
+                                {
+                                    <tr>
+                                        <td colspan="6" class="empty-state">No alarms yet</td>
+                                    </tr>
+                                }
+                                else
+                                {
+                                    @foreach (var alarm in liveAlarms.Take(10))
+                                    {
+                                        <tr class="@(alarm.IsNew ? "new-row" : "")">
+                                            <td>@alarm.Alert.DeviceId</td>
+                                            <td>@GetBuildingDisplay(alarm.Alert)</td>
+                                            <td class="message-cell">@alarm.Alert.Message</td>
+                                            <td>
+                                                <span class="severity-badge @GetSeverityClass(alarm.Alert.Severity)">
+                                                    @alarm.Alert.Severity
+                                                </span>
+                                            </td>
+                                            <td>@GetAlarmStatus(alarm.Alert)</td>
+                                            <td class="time-cell">@GetRelativeTime(alarm.ReceivedAt)</td>
+                                        </tr>
+                                    }
+                                }
+                            </tbody>
+                        </table>
                     </div>
                 </div>
 
-                            </div>
-                        </div>
-
-                        <div class="stream-row">
-                            <EventConsole />
-                        </div>
+                <!-- Incidents Grid -->
+                <div class="grid-panel">
+                    <div class="grid-header incidents-header">
+                        <span>Incidents</span>
+                    </div>
+                    <div class="grid-table">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Incident Type</th>
+                                    <th>Root Cause</th>
+                                    <th>Severity</th>
+                                    <th>Status</th>
+                                    <th>Triggered Rule</th>
+                                    <th>Time</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @if (!liveIncidents.Any())
+                                {
+                                    <tr>
+                                        <td colspan="6" class="empty-state">No incidents yet</td>
+                                    </tr>
+                                }
+                                else
+                                {
+                                    @foreach (var incident in liveIncidents.Take(10))
+                                    {
+                                        <tr class="@(incident.IsNew ? "new-row" : "")">
+                                            <td>@GetIncidentType(incident.Alert)</td>
+                                            <td class="message-cell">@GetRootCause(incident.Alert)</td>
+                                            <td>
+                                                <span class="severity-badge @GetSeverityClass(incident.Alert.Severity)">
+                                                    @incident.Alert.Severity
+                                                </span>
+                                            </td>
+                                            <td>@GetIncidentStatus(incident.Alert)</td>
+                                            <td>@GetTriggeredRule(incident.Alert)</td>
+                                            <td class="time-cell">@GetRelativeTime(incident.ReceivedAt)</td>
+                                        </tr>
+                                    }
+                                }
+                            </tbody>
+                        </table>
                     </div>
                 </div>
+
+                <!-- Events Grid -->
+                <div class="grid-panel">
+                    <div class="grid-header events-header">
+                        <span>Live Event Stream</span>
+                    </div>
+                    <div class="grid-table">
+                        <EventConsole />
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
 
                 @code {
                     private List<IncidentNotification> liveIncidents = new();
@@ -127,17 +157,107 @@
                     {
                         await DeviceService.LoadDataAsync();
 
+                        // Load initial alarms and incidents from database
+                        await LoadInitialDataAsync();
+
                         // Subscribe to SignalR events
                         SignalRService.OnIncidentReceived += HandleIncidentReceived;
                         SignalRService.OnAlarmReceived += HandleAlarmReceived;
                         SignalRService.OnConnectionStateChanged += HandleConnectionStateChanged;
 
-        // Start SignalR connection
-        if (!SignalRService.IsConnected)
-        {
-            await SignalRService.StartAsync();
-        }
-    }
+                        // Start SignalR connection
+                        if (!SignalRService.IsConnected)
+                        {
+                            await SignalRService.StartAsync();
+                        }
+                    }
+
+                    private async Task LoadInitialDataAsync()
+                    {
+                        try
+                        {
+                            // Load recent alarms (last 10)
+                            var alarms = await ApiClient.GetAllAlarmsAsync();
+                            var recentAlarms = alarms
+                                .OrderByDescending(a => a.TriggeredUtc)
+                                .Take(10)
+                                .ToList();
+
+                            foreach (var alarm in recentAlarms)
+                            {
+                                var building = DeviceService.GetBuilding(alarm.BuildingId);
+                                var dashboardAlert = new DashboardAlert
+                                {
+                                    AlertId = alarm.AlarmCode,
+                                    DeviceId = alarm.DeviceId,
+                                    DeviceName = "Sensor Device",
+                                    BuildingCode = building?.BuildingCode ?? $"BLD-{alarm.BuildingId}",
+                                    Location = $"{building?.Name ?? "Unknown"}",
+                                    Severity = alarm.Severity,
+                                    Message = alarm.AlarmMessage,
+                                    Timestamp = alarm.TriggeredUtc,
+                                    AdditionalData = new Dictionary<string, object>
+                                    {
+                                        { "BuildingId", alarm.BuildingId },
+                                        { "RuleId", alarm.RuleId },
+                                        { "AlarmStatus", alarm.AlarmStatus }
+                                    }
+                                };
+
+                                liveAlarms.Add(new AlarmNotification
+                                {
+                                    Alert = dashboardAlert,
+                                    ReceivedAt = alarm.TriggeredUtc,
+                                    IsNew = false
+                                });
+                            }
+
+                            // Load recent incidents (last 10)
+                            var incidents = await ApiClient.GetAllIncidentsAsync();
+                            var recentIncidents = incidents
+                                .OrderByDescending(i => i.StartedUtc)
+                                .Take(10)
+                                .ToList();
+
+                            foreach (var incident in recentIncidents)
+                            {
+                                var building = DeviceService.GetBuilding(incident.BuildingId);
+                                var dashboardAlert = new DashboardAlert
+                                {
+                                    AlertId = incident.IncidentCode,
+                                    DeviceId = incident.DeviceId ?? "Unknown",
+                                    DeviceName = "Sensor Device",
+                                    BuildingCode = building?.BuildingCode ?? $"BLD-{incident.BuildingId}",
+                                    Location = $"{building?.Name ?? "Unknown"}",
+                                    Severity = incident.Severity,
+                                    Message = incident.Summary,
+                                    Timestamp = incident.StartedUtc,
+                                    AdditionalData = new Dictionary<string, object>
+                                    {
+                                        { "BuildingId", incident.BuildingId },
+                                        { "IncidentType", incident.IncidentType },
+                                        { "RootCause", incident.RootCause },
+                                        { "Status", incident.Status },
+                                        { "RuleName", incident.TriggeredByRule ? "System Rule" : "N/A" }
+                                    }
+                                };
+
+                                liveIncidents.Add(new IncidentNotification
+                                {
+                                    Alert = dashboardAlert,
+                                    ReceivedAt = incident.StartedUtc,
+                                    IsNew = false
+                                });
+                            }
+
+                            StateHasChanged();
+                        }
+                        catch (Exception ex)
+                        {
+                            // Log error but don't crash the app
+                            Console.WriteLine($"Error loading initial data: {ex.Message}");
+                        }
+                    }
 
     private void HandleIncidentReceived(object? sender, IncidentNotification notification)
     {
@@ -227,6 +347,60 @@
         return timestamp.ToString("MMM dd HH:mm");
     }
 
+    private string GetBuildingDisplay(DashboardAlert alert)
+    {
+        if (alert.AdditionalData.TryGetValue("BuildingId", out var buildingIdObj))
+        {
+            return $"{alert.BuildingCode} ({buildingIdObj})";
+        }
+        return alert.BuildingCode;
+    }
+
+    private string GetAlarmStatus(DashboardAlert alert)
+    {
+        if (alert.AdditionalData.TryGetValue("AlarmStatus", out var statusObj))
+        {
+            return statusObj?.ToString() ?? "Active";
+        }
+        return "Active";
+    }
+
+    private string GetIncidentStatus(DashboardAlert alert)
+    {
+        if (alert.AdditionalData.TryGetValue("Status", out var statusObj))
+        {
+            return statusObj?.ToString() ?? "Active";
+        }
+        return "Active";
+    }
+
+    private string GetIncidentType(DashboardAlert alert)
+    {
+        if (alert.AdditionalData.TryGetValue("IncidentType", out var typeObj))
+        {
+            return typeObj?.ToString() ?? "Unknown";
+        }
+        return "Unknown";
+    }
+
+    private string GetRootCause(DashboardAlert alert)
+    {
+        if (alert.AdditionalData.TryGetValue("RootCause", out var causeObj))
+        {
+            return causeObj?.ToString() ?? "Under investigation";
+        }
+        return "Under investigation";
+    }
+
+    private string GetTriggeredRule(DashboardAlert alert)
+    {
+        if (alert.AdditionalData.TryGetValue("RuleName", out var ruleObj))
+        {
+            return ruleObj?.ToString() ?? "N/A";
+        }
+        return "N/A";
+    }
+
     public async ValueTask DisposeAsync()
     {
         SignalRService.OnIncidentReceived -= HandleIncidentReceived;
@@ -261,10 +435,8 @@
 
     /* Live Monitoring Section */
     .live-monitoring-section {
-        flex: 0 0 450px;
+        flex: 1;
         background: white;
-        border-radius: 8px;
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
         display: flex;
         flex-direction: column;
         overflow: hidden;
@@ -274,254 +446,204 @@
         display: flex;
         justify-content: space-between;
         align-items: center;
-        padding: 15px 20px;
-        background: #f5f5f5;
-        color: #1f2937;
-        border-bottom: 1px solid #e0e0e0;
+        padding: 12px 20px;
+        background: white;
+        border-bottom: 1px solid #ddd;
     }
 
     .header-left h3 {
         margin: 0;
-        font-size: 18px;
-        font-weight: 700;
+        font-size: 16px;
+        font-weight: 600;
         display: inline-flex;
         align-items: center;
-        gap: 8px;
+        gap: 10px;
+        color: #333;
     }
 
     .connection-badge {
         display: inline-block;
         padding: 4px 12px;
-        border-radius: 12px;
+        border-radius: 4px;
         font-size: 11px;
-        font-weight: 600;
-        margin-left: 12px;
-        background: rgba(255, 255, 255, 0.2);
+        font-weight: 500;
+        margin-left: 10px;
     }
 
     .connection-badge.connected {
         background: #10b981;
-        animation: pulse 2s infinite;
+        color: white;
     }
 
     .connection-badge.connecting,
     .connection-badge.reconnecting {
         background: #f59e0b;
+        color: white;
     }
 
     .connection-badge.failed,
     .connection-badge.disconnected {
         background: #ef4444;
+        color: white;
     }
 
-    @@keyframes pulse {
-        0%, 100% { opacity: 1; }
-        50% { opacity: 0.7; }
-    }
-
-    .live-stats {
+    .header-right {
         display: flex;
-        gap: 20px;
+        gap: 15px;
+    }
+
+    .stat-badge {
         font-size: 13px;
+        color: #666;
     }
 
-    .stat-item {
-        display: flex;
-        align-items: center;
-        gap: 6px;
-    }
-
-    .stat-item strong {
-        font-size: 16px;
+    .stat-badge strong {
         font-weight: 700;
+        color: #333;
     }
 
-    .live-updates-grid {
-        display: grid;
-        grid-template-columns: repeat(2, 1fr);
-        gap: 1px;
-        background: #e5e7eb;
-        flex: 1;
-        overflow: hidden;
-    }
-
-    .live-column {
-        background: white;
+    /* Grid Container */
+    .grid-container {
         display: flex;
         flex-direction: column;
+        gap: 0;
+        flex: 1;
         overflow: hidden;
+        border-top: 1px solid #ddd;
     }
 
-    .column-header {
-        padding: 12px 15px;
-        font-weight: 700;
-        font-size: 13px;
+    .grid-panel {
         display: flex;
-        align-items: center;
-        gap: 8px;
+        flex-direction: column;
+        border-bottom: 1px solid #ddd;
+        overflow: hidden;
+        flex: 1;
     }
 
-    .incident-header {
+    .grid-panel:last-child {
+        border-bottom: none;
+    }
+
+    .grid-header {
+        padding: 10px 15px;
+        font-weight: 600;
+        font-size: 13px;
+        color: white;
+        border-bottom: 1px solid rgba(0,0,0,0.1);
+    }
+
+    .alarms-header {
         background: #6b7280;
-        color: white;
     }
 
-    .alarm-header {
-        background: #9ca3af;
-        color: white;
+    .incidents-header {
+        background: #6b7280;
     }
 
-    .audit-header {
-        background: #d1d5db;
-        color: #4b5563;
+    .events-header {
+        background: #6b7280;
     }
 
-    .column-content {
+    .grid-table {
         flex: 1;
         overflow-y: auto;
-        padding: 10px;
+    }
+
+    .data-table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+    .data-table th {
+        background: #b8b8b8;
+        padding: 8px 12px;
+        text-align: left;
+        font-weight: 600;
+        font-size: 0.75rem;
+        color: #333;
+        text-transform: uppercase;
+        border-bottom: none;
+        position: sticky;
+        top: 0;
+        z-index: 1;
+    }
+
+    .data-table td {
+        padding: 8px 12px;
+        border-bottom: none;
+        font-size: 0.85rem;
+    }
+
+    .data-table tbody tr {
+        background: white;
+    }
+
+    .data-table tbody tr:nth-child(even) {
+        background: #e8e8e8;
+    }
+
+    .data-table tbody tr:hover {
+        background-color: #d0d0d0;
+    }
+
+    .data-table tbody tr.new-row {
+        background: #b3d9ff;
+    }
+
+    .data-table tbody tr.new-row:nth-child(even) {
+        background: #b3d9ff;
     }
 
     .empty-state {
         text-align: center;
-        padding: 40px 20px;
-        color: #9ca3af;
-        font-size: 13px;
+        color: #6c757d;
+        padding: 30px;
+        font-style: italic;
     }
 
-    .live-item {
-        background: #f9fafb;
-        border: 1px solid #e5e7eb;
-        border-radius: 6px;
-        padding: 10px;
-        margin-bottom: 8px;
-        transition: all 0.3s ease;
+    .message-cell {
+        max-width: 250px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
     }
 
-    .live-item.new-item {
-        background: #fef3c7;
-        border-color: #fbbf24;
-        box-shadow: 0 0 0 3px rgba(251, 191, 36, 0.1);
-        animation: fadeIn 0.5s ease;
+    .time-cell {
+        color: #6c757d;
+        font-size: 0.8rem;
+        white-space: nowrap;
     }
 
-    @@keyframes fadeIn {
-        from {
-            opacity: 0;
-            transform: translateY(-10px);
-        }
-        to {
-            opacity: 1;
-            transform: translateY(0);
-        }
-    }
-
-    .item-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 6px;
-    }
-
-    .severity-badge,
-    .result-badge {
-        font-size: 9px;
-        font-weight: 700;
-        padding: 3px 8px;
-        border-radius: 10px;
+    .severity-badge {
+        padding: 4px 12px;
+        border-radius: 3px;
+        font-size: 0.7rem;
+        font-weight: 600;
         text-transform: uppercase;
     }
 
-    .severity-critical {
-        background: #dc2626;
+    .severity-badge.severity-critical {
+        background: #dc3545;
         color: white;
     }
 
-    .severity-high {
-        background: #f59e0b;
+    .severity-badge.severity-high {
+        background: #fd7e14;
         color: white;
     }
 
-    .severity-medium {
-        background: #3b82f6;
+    .severity-badge.severity-medium {
+        background: #ffc107;
+        color: #333;
+    }
+
+    .severity-badge.severity-low {
+        background: #28a745;
         color: white;
     }
 
-    .severity-low {
-        background: #10b981;
+    .severity-badge.severity-info {
+        background: #17a2b8;
         color: white;
-    }
-
-    .severity-info {
-        background: #6b7280;
-        color: white;
-    }
-
-    .result-success {
-        background: #10b981;
-        color: white;
-    }
-
-    .result-failed {
-        background: #ef4444;
-        color: white;
-    }
-
-    .result-info {
-        background: #3b82f6;
-        color: white;
-    }
-
-    .timestamp {
-        font-size: 10px;
-        color: #6b7280;
-    }
-
-    .item-body {
-        font-size: 12px;
-    }
-
-    .item-title {
-        font-weight: 700;
-        color: #1f2937;
-        margin-bottom: 3px;
-    }
-
-    .item-message {
-        color: #4b5563;
-        margin-bottom: 4px;
-        line-height: 1.4;
-    }
-
-    .item-location {
-        color: #6b7280;
-        font-size: 11px;
-    }
-
-    /* Row 2: Devices + Simulator Controls - Fixed Height */
-    .controls-row {
-        display: flex;
-        gap: 10px;
-        flex: 0 0 400px;
-        min-height: 400px;
-        max-height: 400px;
-    }
-
-    .devices-section {
-        flex: 0 0 340px;
-        overflow-y: auto;
-        overflow-x: hidden;
-    }
-
-    .simulator-section {
-        flex: 1;
-        overflow-y: auto;
-    }
-
-    /* Row 3: Live Event Stream - Takes Remaining Space */
-    .stream-row {
-        flex: 1;
-        min-height: 300px;
-        overflow: hidden;
     }
 </style>

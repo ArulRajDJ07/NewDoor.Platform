@@ -10,6 +10,7 @@ using NewDoor.Platform.DTO.Features.Alarms.Models;
 using NewDoor.Platform.DTO.Features.Incidents.Models;
 using NewDoor.Platform.DTO.Features.Devices.Models;
 using NewDoor.Platform.DTO.Common;
+using NewDoor.API.Repositories.Interface;
 
 namespace NewDoor.API.Handlers;
 
@@ -33,46 +34,21 @@ public class AlarmCreatedMessageHandler : IKafkaMessageHandler<AlarmCreatedEvent
     #region Handler
     public async Task HandleAsync(string key, AlarmCreatedEvent message, CancellationToken cancellationToken)
     {
+        _logger.LogInformation("Processing alarm {AlarmCode}", message.AlarmCode);
+
         using var scope = _serviceScopeFactory.CreateScope();
         var mediator = scope.ServiceProvider.GetRequiredService<IMediator>();
         var hubContext = scope.ServiceProvider.GetRequiredService<IHubContext<NotificationHub>>();
 
-        _logger.LogError("=== ALARM HANDLER START: {AlarmCode} ===", message.AlarmCode);
-
-        AlarmResponse? alarmResponse = null;
-        bool canPersist = false;
-
         try
         {
-            canPersist = await ValidateForeignKeysAsync(mediator, message, cancellationToken);
-            _logger.LogError("Alarm {AlarmCode} validation result: {CanPersist}", message.AlarmCode, canPersist);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error validating alarm {AlarmCode}", message.AlarmCode);
-        }
-
-        if (canPersist)
-        {
-            try
-            {
-                alarmResponse = await StoreAlarmAsync(mediator, message, cancellationToken);
-                _logger.LogError("Alarm {AlarmCode} stored successfully: ID={Id}", message.AlarmCode, alarmResponse.Id);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failed to store alarm {AlarmCode}", message.AlarmCode);
-            }
-        }
-
-        try
-        {
+            var alarmResponse = await StoreAlarmAsync(mediator, message, cancellationToken);
             await BroadcastAlarmToUIAsync(hubContext, alarmResponse, message, cancellationToken);
-            _logger.LogError("Alarm {AlarmCode} broadcasted to UI", message.AlarmCode);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to broadcast alarm {AlarmCode}", message.AlarmCode);
+            _logger.LogError(ex, "Alarm handler failed for {Code}", message.AlarmCode);
+            throw;
         }
     }
     #endregion
@@ -86,51 +62,91 @@ public class AlarmCreatedMessageHandler : IKafkaMessageHandler<AlarmCreatedEvent
 
     private async Task<AlarmResponse> StoreAlarmAsync(IMediator mediator, AlarmCreatedEvent message, CancellationToken cancellationToken)
     {
-        int? incidentId = null;
-        if (!string.IsNullOrEmpty(message.IncidentCode))
+        try
         {
-            try
+            using var scope = _serviceScopeFactory.CreateScope();
+            var alarmRepository = scope.ServiceProvider.GetRequiredService<IAlarmRepository>();
+
+            var existingAlarm = await alarmRepository.GetByAlarmCodeAsync(message.AlarmCode);
+
+            if (existingAlarm != null)
             {
-                var incidentFilter = new IncidentFilterRequest
+                return new AlarmResponse
                 {
-                    Filters = new List<FilterRequest>
-                    {
-                        new FilterRequest
-                        {
-                            FieldName = "IncidentCode",
-                            Operator = "eq",
-                            Value = message.IncidentCode
-                        }
-                    },
-                    PageSize = 1
+                    Id = existingAlarm.Id,
+                    AlarmCode = existingAlarm.AlarmCode,
+                    DeviceId = existingAlarm.DeviceId,
+                    BuildingId = existingAlarm.BuildingId,
+                    RuleId = existingAlarm.RuleId ?? 0,
+                    IncidentId = existingAlarm.IncidentId,
+                    Severity = existingAlarm.Severity,
+                    AlarmMessage = existingAlarm.AlarmMessage,
+                    AlarmStatus = existingAlarm.AlarmStatus,
+                    TriggeredUtc = existingAlarm.TriggeredUtc,
+                    TriggeredBy = existingAlarm.TriggeredBy
                 };
-
-                var incidentQuery = new FindAllIncidentQuery(incidentFilter);
-                var incidents = await mediator.Send(incidentQuery, cancellationToken);
-                incidentId = incidents.FirstOrDefault()?.Id;
             }
-            catch
+
+            int? incidentId = null;
+            if (!string.IsNullOrEmpty(message.IncidentCode))
             {
-                // Ignore if incident not found
+                try
+                {
+                    var incidentFilter = new IncidentFilterRequest
+                    {
+                        Filters = new List<FilterRequest>
+                        {
+                            new FilterRequest
+                            {
+                                FieldName = "IncidentCode",
+                                Operator = "eq",
+                                Value = message.IncidentCode
+                            }
+                        },
+                        PageSize = 1
+                    };
+
+                    var incidentQuery = new FindAllIncidentQuery(incidentFilter);
+                    var incidents = await mediator.Send(incidentQuery, cancellationToken);
+                    incidentId = incidents.FirstOrDefault()?.Id;
+                }
+                catch { }
             }
+
+            var addAlarmRequest = new AddAlarmRequest
+            {
+                AlarmCode = message.AlarmCode,
+                DeviceId = message.DeviceId,
+                BuildingId = message.BuildingId,
+                RuleId = message.RuleId,
+                IncidentId = incidentId,
+                Severity = message.Severity,
+                AlarmMessage = message.AlarmMessage,
+                AlarmStatus = message.AlarmStatus,
+                TriggeredUtc = message.TriggeredUtc,
+                TriggeredBy = message.TriggeredBy
+            };
+
+            var command = new AddAlarmCommand(addAlarmRequest);
+            return await mediator.Send(command, cancellationToken);
         }
-
-        var addAlarmRequest = new AddAlarmRequest
+        catch (Exception ex)
         {
-            AlarmCode = message.AlarmCode,
-            DeviceId = message.DeviceId, // Now storing string DeviceId directly from telemetry
-            BuildingId = message.BuildingId,
-            RuleId = message.RuleId,
-            IncidentId = incidentId,
-            Severity = message.Severity,
-            AlarmMessage = message.AlarmMessage,
-            AlarmStatus = message.AlarmStatus,
-            TriggeredUtc = message.TriggeredUtc,
-            TriggeredBy = message.TriggeredBy
-        };
+            _logger.LogError(ex, "DB error for alarm {Code} - using fallback", message.AlarmCode);
 
-        var command = new AddAlarmCommand(addAlarmRequest);
-        return await mediator.Send(command, cancellationToken);
+            return new AlarmResponse
+            {
+                AlarmCode = message.AlarmCode,
+                DeviceId = message.DeviceId,
+                BuildingId = message.BuildingId,
+                RuleId = message.RuleId,
+                Severity = message.Severity,
+                AlarmMessage = message.AlarmMessage,
+                AlarmStatus = message.AlarmStatus,
+                TriggeredUtc = message.TriggeredUtc,
+                TriggeredBy = message.TriggeredBy
+            };
+        }
     }
 
     private async Task BroadcastAlarmToUIAsync(IHubContext<NotificationHub> hubContext, AlarmResponse? alarm, AlarmCreatedEvent message, CancellationToken cancellationToken)

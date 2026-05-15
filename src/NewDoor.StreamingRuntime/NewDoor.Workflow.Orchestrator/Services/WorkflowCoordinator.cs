@@ -176,6 +176,7 @@ public class WorkflowCoordinator : IWorkflowCoordinator
 
         var alarmEvent = new AlarmEvent
         {
+            AlarmId = $"ALM-{runtimeEvent.CorrelationId}-{DateTime.UtcNow:yyyyMMddHHmmss}",
             CorrelationId = runtimeEvent.CorrelationId,
             DeviceId = runtimeEvent.DeviceId,
             DeviceName = runtimeEvent.DeviceName,
@@ -191,6 +192,7 @@ public class WorkflowCoordinator : IWorkflowCoordinator
             {
                 { "Temperature", runtimeEvent.Temperature },
                 { "SmokeLevel", runtimeEvent.SmokeLevel },
+                { "RuleId", 1 },
                 { "RuleTriggered", processorResponse.RuleTriggered },
                 { "ConfidenceScore", processorResponse.ConfidenceScore }
             }

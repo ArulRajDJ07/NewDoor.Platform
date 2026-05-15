@@ -9,6 +9,7 @@ using NewDoor.API.Features.Events.Command;
 using NewDoor.Platform.DTO.Features.EventsHistorys.Models;
 using NewDoor.Platform.DTO.Features.Devices.Models;
 using NewDoor.Platform.DTO.Features.Events.Models;
+using NewDoor.API.Repositories.Interface;
 
 namespace NewDoor.API.Handlers;
 
@@ -32,25 +33,19 @@ public class AuditHistoryMessageHandler : IKafkaMessageHandler<AuditHistoryEvent
     #region Handler
     public async Task HandleAsync(string key, AuditHistoryEvent message, CancellationToken cancellationToken)
     {
-        // Create a new scope for this message to resolve scoped dependencies
         using var scope = _serviceScopeFactory.CreateScope();
         var mediator = scope.ServiceProvider.GetRequiredService<IMediator>();
         var hubContext = scope.ServiceProvider.GetRequiredService<IHubContext<NotificationHub>>();
 
         try
         {
-            // 1. Create Event record first
             var eventResponse = await StoreEventAsync(mediator, message, cancellationToken);
-
-            // 2. Create EventsHistory with the Event.Id
             var eventsHistoryResponse = await StoreEventsHistoryAsync(mediator, message, eventResponse.Id, cancellationToken);
-
-            // 3. Broadcast to UI via SignalR
             await BroadcastAuditToUIAsync(hubContext, eventsHistoryResponse, message, cancellationToken);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error handling audit.history for CorrelationId: {CorrelationId}", message.CorrelationId);
+            _logger.LogError(ex, "Audit handler failed: {CorrelationId}", message.CorrelationId);
             throw;
         }
     }
@@ -59,49 +54,108 @@ public class AuditHistoryMessageHandler : IKafkaMessageHandler<AuditHistoryEvent
     #region Private Methods
     private async Task<EventResponse> StoreEventAsync(IMediator mediator, AuditHistoryEvent message, CancellationToken cancellationToken)
     {
-        var addEventRequest = new AddEventRequest
+        try
         {
-            EventId = message.EventIdGuid, // Use the GUID from audit event
-            DeviceId = message.DeviceId, // Now storing string DeviceId directly from telemetry
-            BuildingId = message.BuildingId,
-            EventType = message.EventType,
-            Temperature = message.Temperature,
-            SmokeLevel = message.SmokeLevel,
-            BatteryLevel = message.BatteryLevel,
-            SignalStrength = message.SignalStrength,
-            Payload = System.Text.Json.JsonSerializer.Serialize(message.Metadata),
-            Severity = message.Severity,
-            EventUtc = message.EventUtc,
-            CorrelationId = message.CorrelationId
-        };
+            using var scope = _serviceScopeFactory.CreateScope();
+            var eventRepository = scope.ServiceProvider.GetRequiredService<IEventRepository>();
 
-        var command = new AddEventCommand(addEventRequest);
-        var result = await mediator.Send(command, cancellationToken);
+            var existingEvent = await eventRepository.GetByEventIdAsync(message.EventIdGuid.ToString());
 
-        return result;
+            if (existingEvent != null)
+            {
+                return new EventResponse
+                {
+                    Id = existingEvent.Id,
+                    EventId = existingEvent.EventId,
+                    DeviceId = existingEvent.DeviceId,
+                    BuildingId = existingEvent.BuildingId,
+                    EventType = existingEvent.EventType,
+                    Temperature = existingEvent.Temperature,
+                    SmokeLevel = existingEvent.SmokeLevel,
+                    BatteryLevel = existingEvent.BatteryLevel,
+                    SignalStrength = existingEvent.SignalStrength,
+                    Severity = existingEvent.Severity,
+                    EventUtc = existingEvent.EventUtc,
+                    CorrelationId = existingEvent.CorrelationId
+                };
+            }
+
+            var addEventRequest = new AddEventRequest
+            {
+                EventId = message.EventIdGuid,
+                DeviceId = message.DeviceId,
+                BuildingId = message.BuildingId,
+                EventType = message.EventType,
+                Temperature = message.Temperature,
+                SmokeLevel = message.SmokeLevel,
+                BatteryLevel = message.BatteryLevel,
+                SignalStrength = message.SignalStrength,
+                Payload = System.Text.Json.JsonSerializer.Serialize(message.Metadata),
+                Severity = message.Severity,
+                EventUtc = message.EventUtc,
+                CorrelationId = message.CorrelationId
+            };
+
+            var command = new AddEventCommand(addEventRequest);
+            return await mediator.Send(command, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "DB error for event {EventId} - using fallback", message.EventIdGuid);
+
+            return new EventResponse
+            {
+                EventId = message.EventIdGuid.ToString(),
+                DeviceId = message.DeviceId,
+                BuildingId = message.BuildingId,
+                EventType = message.EventType,
+                Temperature = message.Temperature,
+                SmokeLevel = message.SmokeLevel,
+                BatteryLevel = message.BatteryLevel,
+                SignalStrength = message.SignalStrength,
+                Severity = message.Severity,
+                EventUtc = message.EventUtc,
+                CorrelationId = message.CorrelationId
+            };
+        }
     }
 
     private async Task<EventsHistoryResponse> StoreEventsHistoryAsync(IMediator mediator, AuditHistoryEvent message, int eventId, CancellationToken cancellationToken)
     {
-        // Lookup Device by DeviceId string to get integer PK
-        var devicePkId = await GetDeviceIdByDeviceIdentifierAsync(mediator, message.DeviceId, cancellationToken);
-
-        var addEventsHistoryRequest = new AddEventsHistoryRequest
+        try
         {
-            EventId = eventId, // Use the Event.Id we just created
-            DeviceId = devicePkId,
-            EventType = message.EventType,
-            Severity = message.Severity,
-            ProcessingResult = message.ProcessingResult,
-            ProcessorName = message.ProcessorName,
-            Remarks = message.Remarks,
-            ProcessedUtc = message.ProcessedUtc
-        };
+            var devicePkId = await GetDeviceIdByDeviceIdentifierAsync(mediator, message.DeviceId, cancellationToken);
 
-        var command = new AddEventsHistoryCommand(addEventsHistoryRequest);
-        var result = await mediator.Send(command, cancellationToken);
+            var addEventsHistoryRequest = new AddEventsHistoryRequest
+            {
+                EventId = eventId,
+                DeviceId = devicePkId,
+                EventType = message.EventType,
+                Severity = message.Severity,
+                ProcessingResult = message.ProcessingResult,
+                ProcessorName = message.ProcessorName,
+                Remarks = message.Remarks,
+                ProcessedUtc = message.ProcessedUtc
+            };
 
-        return result;
+            var command = new AddEventsHistoryCommand(addEventsHistoryRequest);
+            return await mediator.Send(command, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "DB error for events history - using fallback");
+
+            return new EventsHistoryResponse
+            {
+                EventId = eventId,
+                EventType = message.EventType,
+                Severity = message.Severity,
+                ProcessingResult = message.ProcessingResult,
+                ProcessorName = message.ProcessorName,
+                Remarks = message.Remarks,
+                ProcessedUtc = message.ProcessedUtc
+            };
+        }
     }
 
     private async Task<int> GetDeviceIdByDeviceIdentifierAsync(IMediator mediator, string deviceId, CancellationToken cancellationToken)

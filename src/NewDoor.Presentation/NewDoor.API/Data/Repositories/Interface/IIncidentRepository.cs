@@ -9,4 +9,5 @@
     {
         Task<int> AddRangeAsync(ICollection<Incident> incidents);
         Task<List<Incident>> GetAllFilteredAsync(IncidentFilterRequest filter);
+        Task<Incident?> GetByIncidentCodeAsync(string incidentCode);
     }

@@ -9,4 +9,5 @@
     {
         Task<int> AddRangeAsync(ICollection<Event> events);
         Task<List<Event>> GetAllFilteredAsync(EventFilterRequest filter);
+        Task<Event?> GetByEventIdAsync(string eventId);
     }

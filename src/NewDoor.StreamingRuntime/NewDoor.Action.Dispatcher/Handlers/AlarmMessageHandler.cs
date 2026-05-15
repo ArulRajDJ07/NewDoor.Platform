@@ -56,6 +56,11 @@ public class AlarmMessageHandler : IKafkaMessageHandler<AlarmEvent>
     #region Private Methods
     private async Task PublishAlarmCreatedAsync(AlarmEvent alarm, CancellationToken cancellationToken)
     {
+        // Extract RuleId from Context dictionary
+        var ruleId = alarm.Context.TryGetValue("RuleId", out var ruleIdValue) && ruleIdValue != null 
+            ? Convert.ToInt32(ruleIdValue) 
+            : 1;
+
         var alarmCreatedEvent = new AlarmCreatedEvent
         {
             AlarmCode = alarm.AlarmId,
@@ -63,7 +68,7 @@ public class AlarmMessageHandler : IKafkaMessageHandler<AlarmEvent>
             DeviceId = alarm.DeviceId,
             BuildingId = alarm.BuildingId,
             BuildingCode = alarm.BuildingCode,
-            RuleId = alarm.RuleId,
+            RuleId = ruleId,
             IncidentCode = alarm.IncidentId,
             Severity = alarm.Severity,
             AlarmMessage = alarm.Message,

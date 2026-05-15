@@ -1,0 +1,210 @@
+@* Simple Monitoring Grid Component *@
+
+<div class="monitoring-grid">
+    <!-- Top Stats Cards -->
+    <div class="stats-cards">
+        <div class="stat-card">
+            <div class="stat-icon buildings">
+                <i class="icon">🏢</i>
+            </div>
+            <div class="stat-content">
+                <div class="stat-value">@TotalBuildings</div>
+                <div class="stat-label">Total Buildings</div>
+            </div>
+        </div>
+
+        <div class="stat-card">
+            <div class="stat-icon devices">
+                <i class="icon">📱</i>
+            </div>
+            <div class="stat-content">
+                <div class="stat-value">@TotalDevices</div>
+                <div class="stat-label">Total Devices</div>
+            </div>
+        </div>
+
+        <div class="stat-card">
+            <div class="stat-icon alerts">
+                <i class="icon">🔔</i>
+            </div>
+            <div class="stat-content">
+                <div class="stat-value">@ActiveAlerts</div>
+                <div class="stat-label">Active Alerts</div>
+            </div>
+        </div>
+
+        <div class="stat-card">
+            <div class="stat-icon offline">
+                <i class="icon">📡</i>
+            </div>
+            <div class="stat-content">
+                <div class="stat-value">@OfflineDevices</div>
+                <div class="stat-label">Offline Devices</div>
+            </div>
+        </div>
+
+        <div class="stat-card">
+            <div class="stat-icon events">
+                <i class="icon">📊</i>
+            </div>
+            <div class="stat-content">
+                <div class="stat-value">@TotalEvents</div>
+                <div class="stat-label">Total Streamed</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Live Monitoring Section -->
+    <div class="monitoring-section">
+        <div class="section-header">
+            <h3>LIVE MONITORING</h3>
+            <span class="status-badge @(IsConnected ? "connected" : "disconnected")">
+                @(IsConnected ? "● Connected" : "● Disconnected")
+            </span>
+            <div class="section-stats">
+                <span>Alarms: <strong>@Alarms.Count</strong></span>
+                <span>Incidents: <strong>@Incidents.Count</strong></span>
+            </div>
+        </div>
+
+        <!-- Alarms Table -->
+        <div class="grid-section">
+            <div class="grid-title alarms">Alarms</div>
+            <div class="simple-table">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>DEVICE ID</th>
+                            <th>BUILDING</th>
+                            <th>MESSAGE</th>
+                            <th>SEVERITY</th>
+                            <th>STATUS</th>
+                            <th>TIME</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if (Alarms.Count == 0)
+                        {
+                            <tr><td colspan="6" class="empty">No active alarms</td></tr>
+                        }
+                        else
+                        {
+                            @foreach (var alarm in Alarms.Take(6))
+                            {
+                                <tr>
+                                    <td>@alarm.DeviceId</td>
+                                    <td>@alarm.Building</td>
+                                    <td>@alarm.Message</td>
+                                    <td><span class="severity-box @alarm.Severity.ToLower()"></span></td>
+                                    <td>@alarm.Status</td>
+                                    <td>@alarm.TimeAgo</td>
+                                </tr>
+                            }
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Incidents Table -->
+        <div class="grid-section">
+            <div class="grid-title incidents">Incidents</div>
+            <div class="simple-table">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>INCIDENT TYPE</th>
+                            <th>ROOT CAUSE</th>
+                            <th>SEVERITY</th>
+                            <th>STATUS</th>
+                            <th>TRIGGERED RULE</th>
+                            <th>TIME</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if (Incidents.Count == 0)
+                        {
+                            <tr><td colspan="6" class="empty">No active incidents</td></tr>
+                        }
+                        else
+                        {
+                            @foreach (var incident in Incidents.Take(6))
+                            {
+                                <tr>
+                                    <td>@incident.Type</td>
+                                    <td>@incident.RootCause</td>
+                                    <td><span class="severity-box @incident.Severity.ToLower()"></span></td>
+                                    <td>@incident.Status</td>
+                                    <td>@incident.TriggeredRule</td>
+                                    <td>@incident.TimeAgo</td>
+                                </tr>
+                            }
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Live Event Stream -->
+        <div class="grid-section">
+            <div class="grid-title events">Live Event Stream</div>
+            <div class="event-stream">
+                @if (Events.Count == 0)
+                {
+                    <p class="empty">No events yet. Start simulation to see live events.</p>
+                    <p class="event-count">0 events</p>
+                }
+                else
+                {
+                    <div class="event-list">
+                        @foreach (var evt in Events.Take(10))
+                        {
+                            <div class="event-item">
+                                <span class="event-time">@evt.TimeAgo</span>
+                                <span class="event-message">@evt.Message</span>
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter] public int TotalBuildings { get; set; } = 5;
+    [Parameter] public int TotalDevices { get; set; } = 15;
+    [Parameter] public int ActiveAlerts { get; set; } = 6;
+    [Parameter] public int OfflineDevices { get; set; } = 2;
+    [Parameter] public int TotalEvents { get; set; } = 0;
+    [Parameter] public bool IsConnected { get; set; } = false;
+    [Parameter] public List<AlarmItem> Alarms { get; set; } = new();
+    [Parameter] public List<IncidentItem> Incidents { get; set; } = new();
+    [Parameter] public List<EventItem> Events { get; set; } = new();
+
+    public class AlarmItem
+    {
+        public string DeviceId { get; set; } = "";
+        public string Building { get; set; } = "";
+        public string Message { get; set; } = "";
+        public string Severity { get; set; } = "";
+        public string Status { get; set; } = "";
+        public string TimeAgo { get; set; } = "";
+    }
+
+    public class IncidentItem
+    {
+        public string Type { get; set; } = "";
+        public string RootCause { get; set; } = "";
+        public string Severity { get; set; } = "";
+        public string Status { get; set; } = "";
+        public string TriggeredRule { get; set; } = "";
+        public string TimeAgo { get; set; } = "";
+    }
+
+    public class EventItem
+    {
+        public string Message { get; set; } = "";
+        public string TimeAgo { get; set; } = "";
+    }
+}
