@@ -42,4 +42,9 @@
 
             return await query.ToListAsync();
         }
+
+        public async Task<Event?> GetByEventIdAsync(string eventId)
+        {
+            return await DbSet.AsNoTracking().FirstOrDefaultAsync(e => e.EventId == eventId);
+        }
     }

@@ -1,0 +1,214 @@
+@page "/rules"
+@rendermode InteractiveServer
+@using NewDoor.Web.Services
+@using NewDoor.Platform.DTO.Features.Rules.Models
+@inject ApiClientService ApiClient
+
+<PageTitle>Rules - Configuration</PageTitle>
+
+<ConfigurationMasterDetail TItem="RuleResponse" Title="Rules Configuration" OnRefresh="@LoadRulesAsync">
+    <ListContent>
+        <div class="filters-row">
+            <select @bind="filterType" class="filter-select">
+                <option value="">All Types</option>
+                @foreach (var type in ruleTypes)
+                {
+                    <option value="@type">@type</option>
+                }
+            </select>
+            <select @bind="filterSeverity" class="filter-select">
+                <option value="">All Severities</option>
+                @foreach (var severity in severities)
+                {
+                    <option value="@severity">@severity</option>
+                }
+            </select>
+        </div>
+
+        <div class="items-list">
+            @if (isLoading)
+            {
+                <div class="loading-state">Loading...</div>
+            }
+            else if (!filteredRules.Any())
+            {
+                <div class="empty-state">No rules found</div>
+            }
+            else
+            {
+                @foreach (var rule in filteredRules)
+                {
+                    <div class="item-card @(rule == selectedRule ? "selected" : "")" @onclick="() => selectedRule = rule">
+                        <div class="item-header">
+                            <span class="item-name">@rule.RuleName</span>
+                            <span class="badge badge-@(rule.IsActive ? "active" : "inactive")">
+                                @(rule.IsActive ? "Active" : "Inactive")
+                            </span>
+                        </div>
+                        <div class="item-details">
+                            <span class="item-code">@rule.RuleCode</span>
+                            <span class="item-type">@rule.RuleType - @rule.DeviceType</span>
+                        </div>
+                        <div class="item-stats">
+                            <span class="stat severity-@rule.Severity.ToLower()">
+                                @rule.Severity
+                            </span>
+                            <span class="stat">
+                                @rule.WindowSeconds s
+                            </span>
+                        </div>
+                    </div>
+                }
+            }
+        </div>
+    </ListContent>
+
+    <DetailContent>
+        @if (selectedRule == null)
+        {
+            <div class="no-selection">
+                <p>Select a rule to view details</p>
+            </div>
+        }
+        else
+        {
+            <div class="detail-view">
+                <div class="detail-header">
+                    <h3>@selectedRule.RuleName</h3>
+                    <span class="badge badge-@(selectedRule.IsActive ? "active" : "inactive") large">
+                        @(selectedRule.IsActive ? "Active" : "Inactive")
+                    </span>
+                </div>
+
+                <div class="detail-sections">
+                    <div class="detail-section">
+                        <h4>Basic Information</h4>
+                        <div class="info-grid">
+                            <div class="info-row">
+                                <span class="info-label">Rule ID</span>
+                                <span>@selectedRule.Id</span>
+                            </div>
+                            <div class="info-row">
+                                <span class="info-label">Rule Code</span>
+                                <span>@selectedRule.RuleCode</span>
+                            </div>
+                            <div class="info-row">
+                                <span class="info-label">Rule Name</span>
+                                <span>@selectedRule.RuleName</span>
+                            </div>
+                            <div class="info-row">
+                                <span class="info-label">Status</span>
+                                <span>@(selectedRule.IsActive ? "Active" : "Inactive")</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="detail-section">
+                        <h4>Rule Type & Scope</h4>
+                        <div class="info-grid">
+                            <div class="info-row">
+                                <span class="info-label">Rule Type</span>
+                                <span>@selectedRule.RuleType</span>
+                            </div>
+                            <div class="info-row">
+                                <span class="info-label">Device Type</span>
+                                <span>@selectedRule.DeviceType</span>
+                            </div>
+                            <div class="info-row">
+                                <span class="info-label">Severity</span>
+                                <span class="severity-badge severity-@selectedRule.Severity.ToLower()">@selectedRule.Severity</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="detail-section">
+                        <h4>Threshold & Timing</h4>
+                        <div class="info-grid">
+                            <div class="info-row">
+                                <span class="info-label">Threshold Value</span>
+                                <span>@selectedRule.ThresholdValue</span>
+                            </div>
+                            <div class="info-row">
+                                <span class="info-label">Window (seconds)</span>
+                                <span>@selectedRule.WindowSeconds</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="detail-section">
+                        <h4>Description</h4>
+                        <div class="description-box">
+                            @if (!string.IsNullOrEmpty(selectedRule.Description))
+                            {
+                                <p>@selectedRule.Description</p>
+                            }
+                            else
+                            {
+                                <p class="no-description">No description available</p>
+                            }
+                        </div>
+                    </div>
+
+                    @if (selectedRule.Configurations != null && selectedRule.Configurations.Any())
+                    {
+                        <div class="detail-section">
+                            <h4>Configurations (@selectedRule.Configurations.Count)</h4>
+                            <div class="config-list">
+                                @foreach (var config in selectedRule.Configurations)
+                                {
+                                    <div class="config-item">
+                                        <div class="config-header">
+                                            <span class="config-key">@config.ConfigKey</span>
+                                            <span class="badge badge-small">@config.ConfigType</span>
+                                        </div>
+                                        <div class="config-value">@config.ConfigValue</div>
+                                        @if (!string.IsNullOrEmpty(config.Description))
+                                        {
+                                            <div class="config-description">@config.Description</div>
+                                        }
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+        }
+    </DetailContent>
+</ConfigurationMasterDetail>
+
+@code {
+    private List<RuleResponse> rules = new();
+    private RuleResponse? selectedRule = null;
+    private string searchText = "";
+    private string filterType = "";
+    private string filterSeverity = "";
+    private bool isLoading = true;
+
+    private List<string> ruleTypes => rules.Select(r => r.RuleType).Distinct().OrderBy(t => t).ToList();
+    private List<string> severities => rules.Select(r => r.Severity).Distinct().OrderBy(s => s).ToList();
+
+    private List<RuleResponse> filteredRules => rules
+        .Where(r => (string.IsNullOrEmpty(searchText) ||
+                     r.RuleName.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
+                     r.RuleCode.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
+                     r.Description.Contains(searchText, StringComparison.OrdinalIgnoreCase)) &&
+                    (string.IsNullOrEmpty(filterType) || r.RuleType == filterType) &&
+                    (string.IsNullOrEmpty(filterSeverity) || r.Severity == filterSeverity))
+        .OrderBy(r => r.RuleName)
+        .ToList();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadRulesAsync();
+    }
+
+    private async Task LoadRulesAsync()
+    {
+        isLoading = true;
+        StateHasChanged();
+        rules = await ApiClient.GetAllRulesAsync();
+        isLoading = false;
+        StateHasChanged();
+    }
+}

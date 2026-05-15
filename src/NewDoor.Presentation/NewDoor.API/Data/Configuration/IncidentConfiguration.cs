@@ -23,6 +23,9 @@
                builder.Property(x => x.BuildingId)
                    .IsRequired();
 
+               builder.Property(x => x.DeviceId)
+                   .HasMaxLength(100);
+
                builder.Property(x => x.IncidentType)
                    .IsRequired()
                    .HasMaxLength(50);
@@ -56,6 +59,7 @@
 
                // Indexes
                builder.HasIndex(x => x.IncidentCode).IsUnique();
+               builder.HasIndex(x => x.DeviceId);
                builder.HasIndex(x => x.BuildingId);
                builder.HasIndex(x => x.IncidentType);
                builder.HasIndex(x => x.Status);

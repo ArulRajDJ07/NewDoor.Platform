@@ -11,6 +11,10 @@
 
             public string ConfigValue { get; set; } = string.Empty;
 
+            public string ConfigType { get; set; } = string.Empty;
+
+            public string Description { get; set; } = string.Empty;
+
             public string Unit { get; set; } = string.Empty;
 
             public bool IsActive { get; set; }

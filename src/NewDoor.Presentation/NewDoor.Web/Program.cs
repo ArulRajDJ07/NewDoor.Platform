@@ -1,4 +1,5 @@
 using NewDoor.Web.Components;
+using NewDoor.Web.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -6,7 +7,26 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
+builder.Services.AddHttpClient();
+
+builder.Services.AddHttpClient<ApiClientService>(client =>
+{
+    var baseUrl = builder.Configuration["Api:BaseUrl"] ?? "https://newdoor-api.azurewebsites.net";
+    client.BaseAddress = new Uri(baseUrl);
+});
+
+builder.Services.AddSingleton<AuthenticationService>();
+builder.Services.AddSingleton<DeviceService>();
+builder.Services.AddSingleton<EventBufferService>();
+builder.Services.AddSingleton<TelemetryGeneratorService>();
+builder.Services.AddSingleton<SimulationEngineService>();
+builder.Services.AddSingleton<SignalRService>();
+
 var app = builder.Build();
+
+// Initialize SignalR connection
+var signalRService = app.Services.GetRequiredService<SignalRService>();
+await signalRService.StartAsync();
 
 // Configure the HTTP request pipeline.
 if (!app.Environment.IsDevelopment())

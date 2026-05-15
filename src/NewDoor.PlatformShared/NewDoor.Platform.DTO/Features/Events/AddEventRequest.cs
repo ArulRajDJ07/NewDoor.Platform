@@ -7,8 +7,8 @@
             [MaxLength(100)]
             public string EventId { get; set; } = string.Empty;
 
-            [Required]
-            public int DeviceId { get; set; }
+            [MaxLength(100)]
+            public string DeviceId { get; set; } = string.Empty;
 
             [Required]
             public int BuildingId { get; set; }

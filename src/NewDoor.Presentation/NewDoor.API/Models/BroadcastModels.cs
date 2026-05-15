@@ -56,7 +56,7 @@ public class AlarmCreatedEvent
 {
     public string AlarmCode { get; set; } = string.Empty;
     public string CorrelationId { get; set; } = string.Empty;
-    public int DeviceId { get; set; }
+    public string DeviceId { get; set; } = string.Empty;
     public int BuildingId { get; set; }
     public string BuildingCode { get; set; } = string.Empty;
     public int RuleId { get; set; }
@@ -75,12 +75,40 @@ public class AlarmCreatedEvent
 public class AuditHistoryEvent
 {
     public string CorrelationId { get; set; } = string.Empty;
+    public string EventIdGuid { get; set; } = string.Empty;
     public int EventId { get; set; }
-    public int DeviceId { get; set; }
+    public string DeviceId { get; set; } = string.Empty;
+    public int BuildingId { get; set; }
     public string EventType { get; set; } = string.Empty;
     public string Severity { get; set; } = string.Empty;
     public string ProcessingResult { get; set; } = string.Empty;
     public string ProcessorName { get; set; } = string.Empty;
     public string Remarks { get; set; } = string.Empty;
     public DateTime ProcessedUtc { get; set; }
+    public DateTime EventUtc { get; set; }
+
+    public double Temperature { get; set; }
+    public double SmokeLevel { get; set; }
+    public double BatteryLevel { get; set; }
+    public double SignalStrength { get; set; }
+
+    public Dictionary<string, object> Metadata { get; set; } = new();
+}
+
+// Telemetry Event Created (for Event table persistence)
+public class TelemetryEventCreatedEvent
+{
+    public string EventId { get; set; } = string.Empty;
+    public string CorrelationId { get; set; } = string.Empty;
+    public string DeviceId { get; set; } = string.Empty;
+    public int BuildingId { get; set; }
+    public string EventType { get; set; } = string.Empty;
+    public double Temperature { get; set; }
+    public double SmokeLevel { get; set; }
+    public double BatteryLevel { get; set; }
+    public double SignalStrength { get; set; }
+    public Dictionary<string, object> Payload { get; set; } = new();
+    public string Severity { get; set; } = string.Empty;
+    public DateTime EventUtc { get; set; }
+    public string Status { get; set; } = string.Empty;
 }

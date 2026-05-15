@@ -1,0 +1,119 @@
+@page "/signup"
+@using NewDoor.Web.Services
+@inject AuthenticationService AuthService
+@inject NavigationManager NavigationManager
+
+<div class="login-container">
+    <div class="login-card">
+        <div class="login-header">
+            <div class="brand">
+                <span class="bracket">&#123;</span>
+                <span class="brand-text">dowhatta.api</span>
+                <span class="bracket">&#125;</span>
+            </div>
+            <h2 class="login-title">Create your DoWhatta Studio account</h2>
+        </div>
+
+        <div class="login-form">
+            <div class="form-group">
+                <label class="form-label">Phone number</label>
+                <input type="tel" 
+                       class="form-control phone-input" 
+                       placeholder="Enter your phone number"
+                       @bind="phoneNumber"
+                       @bind:event="oninput" />
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Full name</label>
+                <input type="text" 
+                       class="form-control phone-input" 
+                       placeholder="Enter your full name"
+                       @bind="fullName"
+                       @bind:event="oninput" />
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Email (optional)</label>
+                <input type="email" 
+                       class="form-control phone-input" 
+                       placeholder="Enter your email"
+                       @bind="email"
+                       @bind:event="oninput" />
+            </div>
+
+            <button class="btn btn-continue" 
+                    @onclick="HandleSignup"
+                    disabled="@isLoading">
+                @if (isLoading)
+                {
+                    <span class="spinner-border spinner-border-sm me-2"></span>
+                }
+                Sign Up
+            </button>
+
+            @if (!string.IsNullOrEmpty(errorMessage))
+            {
+                <div class="alert alert-danger mt-3">
+                    @errorMessage
+                </div>
+            }
+
+            <div class="signup-section">
+                <span class="signup-text">Already have an account?</span>
+                <a href="/login" class="signup-link">Login now</a>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private string phoneNumber = "";
+    private string fullName = "";
+    private string email = "";
+    private bool isLoading = false;
+    private string errorMessage = "";
+
+    private async Task HandleSignup()
+    {
+        errorMessage = "";
+
+        if (string.IsNullOrWhiteSpace(phoneNumber))
+        {
+            errorMessage = "Please enter your phone number";
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(fullName))
+        {
+            errorMessage = "Please enter your full name";
+            return;
+        }
+
+        isLoading = true;
+        try
+        {
+            // Simulate signup API call
+            await Task.Delay(1000);
+
+            // For now, just log the user in after signup
+            var success = await AuthService.LoginAsync(phoneNumber);
+            if (success)
+            {
+                NavigationManager.NavigateTo("/");
+            }
+            else
+            {
+                errorMessage = "Signup failed. Please try again.";
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"An error occurred: {ex.Message}";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+}

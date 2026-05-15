@@ -80,7 +80,7 @@ public class AlarmCreatedEvent
 {
     public string AlarmCode { get; set; } = string.Empty;
     public string CorrelationId { get; set; } = string.Empty;
-    public int DeviceId { get; set; }
+    public string DeviceId { get; set; } = string.Empty;
     public int BuildingId { get; set; }
     public string BuildingCode { get; set; } = string.Empty;
     public int RuleId { get; set; }
@@ -99,13 +99,23 @@ public class AlarmCreatedEvent
 public class AuditHistoryEvent
 {
     public string CorrelationId { get; set; } = string.Empty;
-    public int EventId { get; set; }
-    public int DeviceId { get; set; }
+    public string EventIdGuid { get; set; } = string.Empty; // GUID for correlation
+    public int EventId { get; set; } // Will be set after Event record creation
+    public string DeviceId { get; set; } = string.Empty;
+    public int BuildingId { get; set; }
     public string EventType { get; set; } = string.Empty;
     public string Severity { get; set; } = string.Empty;
     public string ProcessingResult { get; set; } = string.Empty;
     public string ProcessorName { get; set; } = "Action.Dispatcher";
     public string Remarks { get; set; } = string.Empty;
     public DateTime ProcessedUtc { get; set; }
+    public DateTime EventUtc { get; set; } = DateTime.UtcNow;
+
+    // Telemetry data for Event creation
+    public double Temperature { get; set; }
+    public double SmokeLevel { get; set; }
+    public double BatteryLevel { get; set; }
+    public double SignalStrength { get; set; }
+
     public Dictionary<string, object> Metadata { get; set; } = new();
 }

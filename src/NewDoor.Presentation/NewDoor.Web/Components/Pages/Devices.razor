@@ -1,0 +1,159 @@
+@page "/devices"
+@rendermode InteractiveServer
+@using NewDoor.Web.Services
+@using NewDoor.Platform.DTO.Features.Devices.Models
+@inject ApiClientService ApiClient
+
+<PageTitle>Devices - Configuration</PageTitle>
+
+<ConfigurationMasterDetail TItem="DeviceResponse" Title="Devices Configuration" OnRefresh="@LoadDevicesAsync">
+    <ListContent>
+        <div class="items-list">
+            @if (isLoading)
+            {
+                <div class="loading-state">Loading...</div>
+            }
+            else if (!filteredDevices.Any())
+            {
+                <div class="empty-state">No devices found</div>
+            }
+            else
+            {
+                @foreach (var device in filteredDevices)
+                {
+                    <div class="item-card @(device == selectedDevice ? "selected" : "")" @onclick="() => selectedDevice = device">
+                        <div class="item-header">
+                            <span class="item-name">@device.DeviceName</span>
+                            <span class="badge badge-status-@device.Status.ToLower()">@device.Status</span>
+                        </div>
+                        <div class="item-details">
+                            <span class="item-code">@device.DeviceId</span>
+                            <span class="item-type">@device.DeviceType</span>
+                        </div>
+                        <div class="item-stats">
+                            <span class="stat">Building @device.BuildingId</span>
+                            <span class="stat">@device.Floor - @device.Zone</span>
+                        </div>
+                    </div>
+                }
+            }
+        </div>
+    </ListContent>
+
+    <DetailContent>
+        @if (selectedDevice == null)
+        {
+            <div class="no-selection">
+                <p>Select a device to view details</p>
+            </div>
+        }
+        else
+        {
+            <div class="detail-view">
+                <div class="detail-header">
+                    <h3>@selectedDevice.DeviceName</h3>
+                    <span class="badge badge-status-@selectedDevice.Status.ToLower() large">@selectedDevice.Status</span>
+                </div>
+
+                <div class="detail-sections">
+                    <div class="detail-section">
+                        <h4>Basic Information</h4>
+                        <div class="info-grid">
+                            <div class="info-row">
+                                <span class="info-label">Record ID</span>
+                                <span>@selectedDevice.Id</span>
+                            </div>
+                            <div class="info-row">
+                                <span class="info-label">Device ID</span>
+                                <span>@selectedDevice.DeviceId</span>
+                            </div>
+                            <div class="info-row">
+                                <span class="info-label">Device Name</span>
+                                <span>@selectedDevice.DeviceName</span>
+                            </div>
+                            <div class="info-row">
+                                <span class="info-label">Device Type</span>
+                                <span>@selectedDevice.DeviceType</span>
+                            </div>
+                            <div class="info-row">
+                                <span class="info-label">Status</span>
+                                <span>@selectedDevice.Status</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="detail-section">
+                        <h4>Location</h4>
+                        <div class="info-grid">
+                            <div class="info-row">
+                                <span class="info-label">Building ID</span>
+                                <span>@selectedDevice.BuildingId</span>
+                            </div>
+                            <div class="info-row">
+                                <span class="info-label">Floor</span>
+                                <span>@selectedDevice.Floor</span>
+                            </div>
+                            <div class="info-row">
+                                <span class="info-label">Zone</span>
+                                <span>@selectedDevice.Zone</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="detail-section">
+                        <h4>Technical Details</h4>
+                        <div class="info-grid">
+                            <div class="info-row">
+                                <span class="info-label">Firmware Version</span>
+                                <span>@selectedDevice.FirmwareVersion</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="detail-section">
+                        <h4>Timestamps</h4>
+                        <div class="info-grid">
+                            <div class="info-row">
+                                <span class="info-label">Created On</span>
+                                <span>@selectedDevice.CreatedOn.ToString("yyyy-MM-dd HH:mm")</span>
+                            </div>
+                            <div class="info-row">
+                                <span class="info-label">Updated On</span>
+                                <span>@selectedDevice.UpdatedOn.ToString("yyyy-MM-dd HH:mm")</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+    </DetailContent>
+</ConfigurationMasterDetail>
+
+@code {
+    private List<DeviceResponse> devices = new();
+    private DeviceResponse? selectedDevice = null;
+    private string searchText = "";
+    private bool isLoading = true;
+
+    private List<DeviceResponse> filteredDevices => devices
+        .Where(d => string.IsNullOrEmpty(searchText) ||
+                    d.DeviceName.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
+                    d.DeviceId.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
+                    d.DeviceType.Contains(searchText, StringComparison.OrdinalIgnoreCase))
+        .OrderBy(d => d.DeviceName)
+        .ToList();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadDevicesAsync();
+    }
+
+    private async Task LoadDevicesAsync()
+    {
+        isLoading = true;
+        StateHasChanged();
+        devices = await ApiClient.GetAllDevicesAsync();
+        isLoading = false;
+        StateHasChanged();
+    }
+}

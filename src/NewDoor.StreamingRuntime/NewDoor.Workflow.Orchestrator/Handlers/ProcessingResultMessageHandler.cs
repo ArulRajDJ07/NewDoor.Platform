@@ -162,6 +162,7 @@ public class ProcessingResultMessageHandler : IKafkaMessageHandler<ProcessorResp
 
             var alarmEvent = new AlarmEvent
             {
+                AlarmId = $"ALM-{processorResponse.CorrelationId}-{DateTime.UtcNow:yyyyMMddHHmmss}",
                 CorrelationId = processorResponse.CorrelationId,
                 DeviceId = GetStringValue(processorResponse.AdditionalData, "DeviceId"),
                 DeviceName = GetStringValue(processorResponse.AdditionalData, "DeviceName"),

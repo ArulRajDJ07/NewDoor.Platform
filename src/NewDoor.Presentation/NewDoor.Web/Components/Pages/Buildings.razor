@@ -1,0 +1,172 @@
+@page "/buildings"
+@rendermode InteractiveServer
+@using NewDoor.Web.Services
+@using NewDoor.Platform.DTO.Features.Buildings.Models
+@inject ApiClientService ApiClient
+
+<PageTitle>Buildings - Configuration</PageTitle>
+
+<ConfigurationMasterDetail TItem="BuildingWithDevicesResponse" Title="Buildings Configuration" OnRefresh="@LoadBuildingsAsync">
+    <ListContent>
+        <div class="items-list">
+            @if (isLoading)
+            {
+                <div class="loading-state">Loading...</div>
+            }
+            else if (!filteredBuildings.Any())
+            {
+                <div class="empty-state">No buildings found</div>
+            }
+            else
+            {
+                @foreach (var building in filteredBuildings)
+                {
+                    <div class="item-card @(building == selectedBuilding ? "selected" : "")" @onclick="() => selectedBuilding = building">
+                        <div class="item-header">
+                            <span class="item-name">@building.BuildingName</span>
+                            <span class="badge badge-@(building.IsActive ? "active" : "inactive")">
+                                @(building.IsActive ? "Active" : "Inactive")
+                            </span>
+                        </div>
+                        <div class="item-details">
+                            <span class="item-code">@building.BuildingCode</span>
+                            <span class="item-address">@building.Address</span>
+                        </div>
+                        <div class="item-stats">
+                            <span class="stat">@building.DeviceCount devices</span>
+                            <span class="stat">@building.ActiveAlarms alarms</span>
+                        </div>
+                    </div>
+                }
+            }
+        </div>
+    </ListContent>
+
+    <DetailContent>
+        @if (selectedBuilding == null)
+        {
+            <div class="no-selection">
+                <p>Select a building to view details</p>
+            </div>
+        }
+        else
+        {
+            <div class="detail-view">
+                <div class="detail-header">
+                    <h3>@selectedBuilding.BuildingName</h3>
+                    <span class="badge badge-@(selectedBuilding.IsActive ? "active" : "inactive") large">
+                        @(selectedBuilding.IsActive ? "Active" : "Inactive")
+                    </span>
+                </div>
+
+                <div class="detail-sections">
+                    <div class="detail-section">                        
+                        <h4>Basic Information</h4>
+                        <div class="info-grid">
+                            <div class="info-row">
+                                <span class="info-label">Building ID</span>
+                                <span>@selectedBuilding.Id</span>
+                            </div>
+                            <div class="info-row">
+                                <span class="info-label">Building Code</span>
+                                <span>@selectedBuilding.BuildingCode</span>
+                            </div>
+                            <div class="info-row">
+                                <span class="info-label">Building Name</span>
+                                <span>@selectedBuilding.BuildingName</span>
+                            </div>
+                            <div class="info-row">
+                                <span class="info-label">Status</span>
+                                <span>@(selectedBuilding.IsActive ? "Active" : "Inactive")</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="detail-section">
+                        <h4>Location</h4>
+                        <div class="info-grid">
+                            <div class="info-row">
+                                <span class="info-label">Address</span>
+                                <span>@selectedBuilding.Address</span>
+                            </div>
+                            <div class="info-row">
+                                <span class="info-label">Latitude</span>
+                                <span>@selectedBuilding.Latitude</span>
+                            </div>
+                            <div class="info-row">
+                                <span class="info-label">Longitude</span>
+                                <span>@selectedBuilding.Longitude</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="detail-section">
+                        <h4>Statistics</h4>
+                        <div class="stats-grid">
+                            <div class="stat-box">
+                                <div class="stat-content">
+                                    <div class="stat-value">@selectedBuilding.DeviceCount</div>
+                                    <div class="stat-label">Total Devices</div>
+                                </div>
+                            </div>
+                            <div class="stat-box">
+                                <div class="stat-content">
+                                    <div class="stat-value">@selectedBuilding.ActiveAlarms</div>
+                                    <div class="stat-label">Active Alarms</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    @if (selectedBuilding.Devices != null && selectedBuilding.Devices.Any())
+                    {
+                        <div class="detail-section">
+                            <h4>Devices (@selectedBuilding.Devices.Count)</h4>
+                            <div class="device-list">
+                                @foreach (var device in selectedBuilding.Devices)
+                                {
+                                    <div class="device-item">
+                                        <div class="device-info">
+                                            <div class="device-name">@device.DeviceName</div>
+                                            <div class="device-code">@device.DeviceCode</div>
+                                        </div>
+                                        <span class="badge badge-status-@device.Status.ToLower()">@device.Status</span>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+        }
+    </DetailContent>
+</ConfigurationMasterDetail>
+
+@code {
+    private List<BuildingWithDevicesResponse> buildings = new();
+    private BuildingWithDevicesResponse? selectedBuilding = null;
+    private string searchText = "";
+    private bool isLoading = true;
+
+    private List<BuildingWithDevicesResponse> filteredBuildings => buildings
+        .Where(b => string.IsNullOrEmpty(searchText) ||
+                    b.BuildingName.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
+                    b.BuildingCode.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
+                    b.Address.Contains(searchText, StringComparison.OrdinalIgnoreCase))
+        .OrderBy(b => b.BuildingName)
+        .ToList();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadBuildingsAsync();
+    }
+
+    private async Task LoadBuildingsAsync()
+    {
+        isLoading = true;
+        StateHasChanged();
+        buildings = await ApiClient.GetAllBuildingsWithDevicesAsync();
+        isLoading = false;
+        StateHasChanged();
+    }
+}

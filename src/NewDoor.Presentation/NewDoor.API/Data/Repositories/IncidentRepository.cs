@@ -42,4 +42,9 @@
 
             return await query.ToListAsync();
         }
+
+        public async Task<Incident?> GetByIncidentCodeAsync(string incidentCode)
+        {
+            return await DbSet.AsNoTracking().FirstOrDefaultAsync(i => i.IncidentCode == incidentCode);
+        }
     }

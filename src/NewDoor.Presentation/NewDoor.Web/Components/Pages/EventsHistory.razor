@@ -1,0 +1,467 @@
+@page "/events-history"
+@rendermode InteractiveServer
+@using NewDoor.Web.Services
+@using NewDoor.Platform.DTO.Features.EventsHistorys.Models
+@inject ApiClientService ApiClient
+@inject SignalRService SignalRService
+@implements IAsyncDisposable
+
+<PageTitle>Events History - Monitoring</PageTitle>
+
+<div class="monitoring-container">
+    <div class="page-header">
+        <div class="header-left">
+            <h2>Events History</h2>
+            <span class="live-indicator @(SignalRService.IsConnected ? "live" : "offline")">
+                @(SignalRService.IsConnected ? "🔴 LIVE" : "○ OFFLINE")
+            </span>
+        </div>
+        <button class="btn-refresh" @onclick="LoadEventsHistoryAsync">
+            <i class="fas fa-sync-alt"></i> Refresh
+        </button>
+    </div>
+
+    <div class="metrics-section">
+        <div class="metric-card">
+            <div class="metric-icon" style="background: #3b82f6;">
+                <i class="fas fa-history"></i>
+            </div>
+            <div class="metric-content">
+                <div class="metric-label">TOTAL EVENTS</div>
+                <div class="metric-value">@eventsHistory.Count</div>
+                <div class="metric-sublabel">Total Events</div>
+            </div>
+        </div>
+
+        <div class="metric-card">
+            <div class="metric-icon" style="background: #10b981;">
+                <i class="fas fa-check"></i>
+            </div>
+            <div class="metric-content">
+                <div class="metric-label">PROCESSED</div>
+                <div class="metric-value">@eventsHistory.Count(e => e.ProcessingResult.ToLower() == "success" || e.ProcessingResult.ToLower() == "processed")</div>
+                <div class="metric-sublabel">Successfully Processed</div>
+            </div>
+        </div>
+
+        <div class="metric-card">
+            <div class="metric-icon" style="background: #ef4444;">
+                <i class="fas fa-times"></i>
+            </div>
+            <div class="metric-content">
+                <div class="metric-label">FAILED</div>
+                <div class="metric-value">@eventsHistory.Count(e => e.ProcessingResult.ToLower() == "failed" || e.ProcessingResult.ToLower() == "error")</div>
+                <div class="metric-sublabel">Failed Events</div>
+            </div>
+        </div>
+
+        <div class="metric-card">
+            <div class="metric-icon" style="background: #f59e0b;">
+                <i class="fas fa-exclamation-triangle"></i>
+            </div>
+            <div class="metric-content">
+                <div class="metric-label">CRITICAL</div>
+                <div class="metric-value">@eventsHistory.Count(e => e.Severity.ToLower() == "critical")</div>
+                <div class="metric-sublabel">Critical Severity</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="event-console-section">
+        <div class="console-header">
+            <h3>EVENT HISTORY</h3>
+            <div class="filter-section">
+                <select @bind="selectedEventType" class="filter-select">
+                    <option value="">All Event Types</option>
+                    <option value="Telemetry">Telemetry</option>
+                    <option value="Alarm">Alarm</option>
+                    <option value="Alert">Alert</option>
+                    <option value="Status">Status</option>
+                </select>
+                <select @bind="selectedSeverity" class="filter-select">
+                    <option value="">All Severities</option>
+                    <option value="Critical">Critical</option>
+                    <option value="High">High</option>
+                    <option value="Medium">Medium</option>
+                    <option value="Low">Low</option>
+                    <option value="Info">Info</option>
+                </select>
+                <select @bind="selectedResult" class="filter-select">
+                    <option value="">All Results</option>
+                    <option value="Success">Success</option>
+                    <option value="Processed">Processed</option>
+                    <option value="Failed">Failed</option>
+                    <option value="Error">Error</option>
+                </select>
+            </div>
+        </div>
+
+        @if (isLoading)
+        {
+            <div class="loading-state">Loading events history...</div>
+        }
+        else if (!filteredEvents.Any())
+        {
+            <div class="empty-state">No events history found.</div>
+        }
+        else
+        {
+            <div class="events-grid">
+                <div class="grid-header">
+                    <div class="col-id">ID</div>
+                    <div class="col-event">Event ID</div>
+                    <div class="col-device">Device ID</div>
+                    <div class="col-type">Event Type</div>
+                    <div class="col-severity">Severity</div>
+                    <div class="col-result">Result</div>
+                    <div class="col-processor">Processor</div>
+                    <div class="col-remarks">Remarks</div>
+                    <div class="col-processed">Processed</div>
+                </div>
+                <div class="grid-body">
+                    @foreach (var evt in filteredEvents)
+                    {
+                        <div class="grid-row">
+                            <div class="col-id">@evt.Id</div>
+                            <div class="col-event">@evt.EventId</div>
+                            <div class="col-device">@evt.DeviceId</div>
+                            <div class="col-type">@evt.EventType</div>
+                            <div class="col-severity">
+                                <span class="badge badge-@evt.Severity.ToLower()">@evt.Severity</span>
+                            </div>
+                            <div class="col-result">
+                                <span class="badge badge-result-@evt.ProcessingResult.ToLower()">@evt.ProcessingResult</span>
+                            </div>
+                            <div class="col-processor">@evt.ProcessorName</div>
+                            <div class="col-remarks" title="@evt.Remarks">@evt.Remarks</div>
+                            <div class="col-processed">@evt.ProcessedUtc.ToString("yyyy-MM-dd HH:mm")</div>
+                        </div>
+                    }
+                </div>
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    private List<EventsHistoryResponse> eventsHistory = new();
+    private string selectedEventType = "";
+    private string selectedSeverity = "";
+    private string selectedResult = "";
+    private bool isLoading = true;
+    private int newEventsCount = 0;
+
+    private List<EventsHistoryResponse> filteredEvents => eventsHistory
+        .Where(e => string.IsNullOrEmpty(selectedEventType) || e.EventType.Equals(selectedEventType, StringComparison.OrdinalIgnoreCase))
+        .Where(e => string.IsNullOrEmpty(selectedSeverity) || e.Severity.Equals(selectedSeverity, StringComparison.OrdinalIgnoreCase))
+        .Where(e => string.IsNullOrEmpty(selectedResult) || e.ProcessingResult.Equals(selectedResult, StringComparison.OrdinalIgnoreCase))
+        .OrderByDescending(e => e.ProcessedUtc)
+        .ToList();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadEventsHistoryAsync();
+
+        // Subscribe to real-time audit history updates
+        SignalRService.OnAuditHistoryReceived += HandleAuditHistoryReceived;
+
+        // Start SignalR if not connected
+        if (!SignalRService.IsConnected)
+        {
+            await SignalRService.StartAsync();
+        }
+    }
+
+    private void HandleAuditHistoryReceived(object? sender, NewDoor.Web.Models.AuditHistoryNotification notification)
+    {
+        // Convert AuditHistoryNotification to EventsHistoryResponse
+        var newEvent = new EventsHistoryResponse
+        {
+            Id = notification.AuditId,
+            EventId = notification.EventId,
+            DeviceId = notification.DeviceId,
+            EventType = notification.EventType,
+            Severity = notification.Severity,
+            ProcessingResult = notification.ProcessingResult,
+            ProcessorName = notification.ProcessorName,
+            Remarks = notification.Remarks,
+            ProcessedUtc = notification.ProcessedUtc
+        };
+
+        // Add to list if not already present
+        if (!eventsHistory.Any(e => e.Id == newEvent.Id && e.EventId == newEvent.EventId))
+        {
+            eventsHistory.Insert(0, newEvent);
+            newEventsCount++;
+
+            // Reset count after 5 seconds
+            _ = Task.Run(async () =>
+            {
+                await Task.Delay(5000);
+                newEventsCount = Math.Max(0, newEventsCount - 1);
+                await InvokeAsync(StateHasChanged);
+            });
+        }
+
+        InvokeAsync(StateHasChanged);
+    }
+
+    private async Task LoadEventsHistoryAsync()
+    {
+        isLoading = true;
+        StateHasChanged();
+        eventsHistory = await ApiClient.GetAllEventsHistoryAsync();
+        isLoading = false;
+        newEventsCount = 0;
+        StateHasChanged();
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        SignalRService.OnAuditHistoryReceived -= HandleAuditHistoryReceived;
+    }
+}
+
+<style>
+    .monitoring-container {
+        padding: 20px;
+        background: #f5f5f5;
+        min-height: 100vh;
+    }
+
+    .page-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 20px;
+    }
+
+    .header-left {
+        display: flex;
+        align-items: center;
+        gap: 15px;
+    }
+
+    .page-header h2 {
+        font-size: 24px;
+        font-weight: 700;
+        color: #333;
+        margin: 0;
+    }
+
+    .live-indicator {
+        display: inline-block;
+        padding: 5px 12px;
+        border-radius: 12px;
+        font-size: 11px;
+        font-weight: 700;
+        background: #6b7280;
+        color: white;
+    }
+
+    .live-indicator.live {
+        background: #10b981;
+        animation: pulse 2s infinite;
+    }
+
+    @@keyframes pulse {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.7; }
+    }
+
+    .btn-refresh {
+        background: #0066cc;
+        color: white;
+        border: none;
+        padding: 10px 20px;
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 14px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .btn-refresh:hover {
+        background: #0052a3;
+    }
+
+    .metrics-section {
+        display: flex;
+        gap: 10px;
+        margin-bottom: 20px;
+    }
+
+    .metric-card {
+        flex: 1;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        background: #ffffff;
+        padding: 10px 12px;
+        border-radius: 6px;
+        border: 1px solid #e0e0e0;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+    }
+
+    .metric-icon {
+        width: 42px;
+        height: 42px;
+        border-radius: 6px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 18px;
+        color: white;
+        flex-shrink: 0;
+    }
+
+    .metric-icon i {
+        font-size: 20px;
+    }
+
+    .metric-content {
+        flex: 1;
+        min-width: 0;
+    }
+
+    .metric-label {
+        font-size: 9px;
+        font-weight: 700;
+        color: #333333;
+        letter-spacing: 0.3px;
+        margin-bottom: 2px;
+    }
+
+    .metric-value {
+        font-size: 22px;
+        font-weight: 700;
+        color: #333333;
+        line-height: 1;
+    }
+
+    .metric-sublabel {
+        font-size: 10px;
+        color: #666666;
+        margin-top: 2px;
+        font-weight: 400;
+    }
+
+    .event-console-section {
+        background: white;
+        border-radius: 8px;
+        padding: 20px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+
+    .console-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 20px;
+    }
+
+    .console-header h3 {
+        font-size: 16px;
+        font-weight: 700;
+        color: #0066cc;
+        margin: 0;
+    }
+
+    .filter-section {
+        display: flex;
+        gap: 10px;
+    }
+
+    .filter-select {
+        padding: 8px 12px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        font-size: 14px;
+    }
+
+    .loading-state, .empty-state {
+        text-align: center;
+        padding: 40px;
+        color: #666;
+        font-size: 16px;
+    }
+
+    .events-grid {
+        border: 1px solid #e0e0e0;
+        border-radius: 6px;
+        overflow: hidden;
+    }
+
+    .grid-header {
+        display: grid;
+        grid-template-columns: 60px 100px 100px 120px 100px 100px 120px 1fr 150px;
+        background: #f8f9fa;
+        font-weight: 600;
+        font-size: 12px;
+        color: #666;
+        padding: 12px;
+        border-bottom: 2px solid #e0e0e0;
+    }
+
+    .grid-body {
+        max-height: 600px;
+        overflow-y: auto;
+    }
+
+    .grid-row {
+        display: grid;
+        grid-template-columns: 60px 100px 100px 120px 100px 100px 120px 1fr 150px;
+        padding: 12px;
+        border-bottom: 1px solid #f0f0f0;
+        align-items: center;
+    }
+
+    .grid-row:hover {
+        background: #f8f9fa;
+    }
+
+    .col-remarks {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .badge {
+        padding: 4px 8px;
+        border-radius: 4px;
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+    }
+
+    .badge-critical {
+        background: #fee2e2;
+        color: #dc2626;
+    }
+
+    .badge-high {
+        background: #fef3c7;
+        color: #d97706;
+    }
+
+    .badge-medium {
+        background: #dbeafe;
+        color: #2563eb;
+    }
+
+    .badge-low, .badge-info {
+        background: #d1fae5;
+        color: #059669;
+    }
+
+    .badge-result-success, .badge-result-processed {
+        background: #d1fae5;
+        color: #059669;
+    }
+
+    .badge-result-failed, .badge-result-error {
+        background: #fee2e2;
+        color: #dc2626;
+    }
+</style>

@@ -1,0 +1,105 @@
+@page "/login"
+@using NewDoor.Web.Services
+@inject AuthenticationService AuthService
+@inject NavigationManager NavigationManager
+
+<div class="login-container">
+    <div class="login-card">
+        <div class="login-header">
+            <div class="brand">
+                <span class="bracket">&#123;</span>
+                <span class="brand-text">dowhatta.api</span>
+                <span class="bracket">&#125;</span>
+            </div>
+            <h2 class="login-title">Login to your DoWhatta Studio</h2>
+        </div>
+
+        <div class="login-form">
+            <div class="form-group">
+                <label class="form-label">Enter your phone number</label>
+                <input type="tel" 
+                       class="form-control phone-input" 
+                       placeholder="Enter your phone number"
+                       @bind="phoneNumber"
+                       @bind:event="oninput"
+                       @onkeypress="HandleKeyPress" />
+            </div>
+
+            <button class="btn btn-continue" 
+                    @onclick="HandleLogin"
+                    disabled="@isLoading">
+                @if (isLoading)
+                {
+                    <span class="spinner-border spinner-border-sm me-2"></span>
+                }
+                Continue
+            </button>
+
+            @if (!string.IsNullOrEmpty(errorMessage))
+            {
+                <div class="alert alert-danger mt-3">
+                    @errorMessage
+                </div>
+            }
+
+            <div class="login-links">
+                <a href="#" class="link-primary">Forgot your password?</a>
+                <span class="link-separator">|</span>
+                <a href="#" class="link-primary">Trouble logging in?</a>
+            </div>
+
+            <div class="signup-section">
+                <span class="signup-text">New to doWhatta.api ?</span>
+                <span class="signup-link-text">Get a free account</span>
+                <a href="/signup" class="signup-link">Sign up now</a>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private string phoneNumber = "";
+    private bool isLoading = false;
+    private string errorMessage = "";
+
+    private async Task HandleLogin()
+    {
+        errorMessage = "";
+
+        if (string.IsNullOrWhiteSpace(phoneNumber))
+        {
+            errorMessage = "Please enter your phone number";
+            return;
+        }
+
+        isLoading = true;
+        try
+        {
+            var success = await AuthService.LoginAsync(phoneNumber);
+            if (success)
+            {
+                NavigationManager.NavigateTo("/");
+            }
+            else
+            {
+                errorMessage = "Login failed. Please try again.";
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"An error occurred: {ex.Message}";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task HandleKeyPress(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await HandleLogin();
+        }
+    }
+}

@@ -3,11 +3,9 @@
     {
         public class AddEventsHistoryRequest  
         {
-            [Required]
-            public int EventId { get; set; }
+            public int? EventId { get; set; }
 
-            [Required]
-            public int DeviceId { get; set; }
+            public int? DeviceId { get; set; }
 
             [Required]
             [MaxLength(50)]

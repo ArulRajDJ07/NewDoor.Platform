@@ -5,9 +5,9 @@
         {
             public int Id { get; set; }
 
-            public int EventId { get; set; }
+            public int? EventId { get; set; }
 
-            public int DeviceId { get; set; }
+            public int? DeviceId { get; set; }
 
             public string EventType { get; set; } = string.Empty;
 

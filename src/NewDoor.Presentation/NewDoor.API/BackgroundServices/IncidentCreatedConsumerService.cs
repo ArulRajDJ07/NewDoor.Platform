@@ -1,5 +1,6 @@
 using NewDoor.EventBus.Consumers;
 using NewDoor.API.Models;
+using NewDoor.API.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace NewDoor.API.BackgroundServices;
@@ -8,18 +9,18 @@ public class IncidentCreatedConsumerService : BackgroundService
 {
     #region Fields
     private readonly IKafkaConsumer _kafkaConsumer;
-    private readonly IConfiguration _configuration;
+    private readonly KafkaTopicConfiguration _topicConfig;
     private readonly ILogger<IncidentCreatedConsumerService> _logger;
     #endregion
 
     #region Constructor
     public IncidentCreatedConsumerService(
-        [FromKeyedServices("IncidentCreated")] IKafkaConsumer kafkaConsumer,
-        IConfiguration configuration,
+        [FromKeyedServices(KafkaConsumerKeys.IncidentCreated)] IKafkaConsumer kafkaConsumer,
+        [FromKeyedServices(KafkaConsumerKeys.IncidentCreated)] KafkaTopicConfiguration topicConfig,
         ILogger<IncidentCreatedConsumerService> logger)
     {
         _kafkaConsumer = kafkaConsumer;
-        _configuration = configuration;
+        _topicConfig = topicConfig;
         _logger = logger;
     }
     #endregion
@@ -29,19 +30,21 @@ public class IncidentCreatedConsumerService : BackgroundService
     {
         try
         {
-            var topic = _configuration["Kafka:IncidentCreatedTopic"] ?? "newdoor.incident.created";
-            _logger.LogInformation("Starting IncidentCreated consumer: {Topic}", topic);
-            await _kafkaConsumer.StartConsumingAsync(topic, stoppingToken);
+            _logger.LogInformation("Starting consumer {ConsumerKey} on topic {Topic}", 
+                _topicConfig.ConsumerKey, _topicConfig.TopicName);
+
+            await _kafkaConsumer.StartConsumingAsync(_topicConfig.TopicName, stoppingToken);
         }
         catch (Exception ex)
         {
-            _logger.LogCritical(ex, "IncidentCreated consumer failed");
+            _logger.LogCritical(ex, "Consumer {ConsumerKey} failed", _topicConfig.ConsumerKey);
             throw;
         }
     }
 
     public override async Task StopAsync(CancellationToken cancellationToken)
     {
+        _logger.LogInformation("Stopping consumer {ConsumerKey}", _topicConfig.ConsumerKey);
         await _kafkaConsumer.StopConsumingAsync();
         await base.StopAsync(cancellationToken);
     }

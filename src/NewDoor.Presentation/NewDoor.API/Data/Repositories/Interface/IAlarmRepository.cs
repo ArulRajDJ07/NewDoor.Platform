@@ -9,4 +9,5 @@
     {
         Task<int> AddRangeAsync(ICollection<Alarm> alarms);
         Task<List<Alarm>> GetAllFilteredAsync(AlarmFilterRequest filter);
+        Task<Alarm?> GetByAlarmCodeAsync(string alarmCode);
     }

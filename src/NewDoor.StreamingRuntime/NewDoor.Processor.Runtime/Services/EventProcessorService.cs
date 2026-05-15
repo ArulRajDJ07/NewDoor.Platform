@@ -53,6 +53,17 @@ public class EventProcessorService : IEventProcessorService
                 DetermineEventType(response); // Determine final event type
             }, cancellationToken);
 
+            // Add telemetry event context to AdditionalData for downstream consumers
+            response.AdditionalData["DeviceId"] = request.Event.DeviceId;
+            response.AdditionalData["DeviceName"] = request.Event.DeviceName;
+            response.AdditionalData["BuildingId"] = request.Event.BuildingId;
+            response.AdditionalData["BuildingCode"] = request.Event.BuildingCode;
+            response.AdditionalData["Floor"] = request.Event.Floor;
+            response.AdditionalData["Zone"] = request.Event.Zone;
+            response.AdditionalData["Temperature"] = request.Event.Temperature;
+            response.AdditionalData["SmokeLevel"] = request.Event.SmokeLevel;
+            response.AdditionalData["BatteryLevel"] = request.Event.BatteryLevel;
+
             _logger.LogInformation("Event processed - Incident: {IsIncident}, Alarm: {IsAlarm}", response.IsIncident, response.IsAlarm);
 
             return response;

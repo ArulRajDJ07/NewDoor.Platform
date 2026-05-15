@@ -21,13 +21,12 @@
                    .HasMaxLength(100);
 
                builder.Property(x => x.DeviceId)
-                   .IsRequired();
+                   .HasMaxLength(100);
 
                builder.Property(x => x.BuildingId)
                    .IsRequired();
 
-               builder.Property(x => x.RuleId)
-                   .IsRequired();
+               builder.Property(x => x.RuleId);
 
                builder.Property(x => x.IncidentId);
 
@@ -54,19 +53,9 @@
                    .HasMaxLength(1000);
 
                // Relationships
-               builder.HasOne(x => x.Device)
-                   .WithMany()
-                   .HasForeignKey(x => x.DeviceId)
-                   .OnDelete(DeleteBehavior.Restrict);
-
                builder.HasOne(x => x.Building)
                    .WithMany()
                    .HasForeignKey(x => x.BuildingId)
-                   .OnDelete(DeleteBehavior.Restrict);
-
-               builder.HasOne(x => x.Rule)
-                   .WithMany()
-                   .HasForeignKey(x => x.RuleId)
                    .OnDelete(DeleteBehavior.Restrict);
 
                builder.HasOne(x => x.Incident)
@@ -74,16 +63,15 @@
                    .HasForeignKey(x => x.IncidentId)
                    .OnDelete(DeleteBehavior.SetNull);
 
-               // Indexes
-               builder.HasIndex(x => x.AlarmCode).IsUnique();
-               builder.HasIndex(x => x.DeviceId);
-               builder.HasIndex(x => x.BuildingId);
-               builder.HasIndex(x => x.RuleId);
-               builder.HasIndex(x => x.IncidentId);
-               builder.HasIndex(x => x.AlarmStatus);
-               builder.HasIndex(x => x.TriggeredUtc);
-               builder.HasIndex(x => new { x.DeviceId, x.AlarmStatus });
-               builder.HasIndex(x => new { x.BuildingId, x.AlarmStatus });
-           }
-       }
-   }
+                           // Indexes
+                           builder.HasIndex(x => x.AlarmCode).IsUnique();
+                           builder.HasIndex(x => x.DeviceId);
+                           builder.HasIndex(x => x.BuildingId);
+                           builder.HasIndex(x => x.IncidentId);
+                           builder.HasIndex(x => x.AlarmStatus);
+                           builder.HasIndex(x => x.TriggeredUtc);
+                           builder.HasIndex(x => new { x.DeviceId, x.AlarmStatus });
+                           builder.HasIndex(x => new { x.BuildingId, x.AlarmStatus });
+                       }
+                   }
+               }

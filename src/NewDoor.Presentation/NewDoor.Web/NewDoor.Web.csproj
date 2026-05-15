@@ -5,6 +5,36 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <BlazorDisableThrowNavigationException>true</BlazorDisableThrowNavigationException>
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+    <PublishReadyToRun>false</PublishReadyToRun>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <PlatformTarget>x64</PlatformTarget>
   </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.SignalR.Client" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\NewDoor.PlatformShared\NewDoor.Platform.DTO\NewDoor.Platform.DTO.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Reference Include="DoWhatta.Platform">
+      <HintPath>..\..\Resource\dowhatta\DoWhatta.Platform.dll</HintPath>
+    </Reference>
+    <Reference Include="DoWhatta.Platform.DTO">
+      <HintPath>..\..\Resource\dowhatta\DoWhatta.Platform.DTO.dll</HintPath>
+    </Reference>
+    <Reference Include="Higgs.Blazor">
+      <HintPath>..\..\Resource\HiggsBlazor\Higgs.Blazor.dll</HintPath>
+    </Reference>
+    <Reference Include="Higgs.Blazor.Foundation">
+      <HintPath>..\..\Resource\HiggsBlazor\Higgs.Blazor.Foundation.dll</HintPath>
+    </Reference>
+    <Reference Include="Higgs.Blazor.Theme">
+      <HintPath>..\..\Resource\HiggsBlazor\Higgs.Blazor.Theme.dll</HintPath>
+    </Reference>
+  </ItemGroup>
 
 </Project>

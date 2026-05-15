@@ -7,7 +7,7 @@
 
             public string AlarmCode { get; set; } = string.Empty;
 
-            public int DeviceId { get; set; }
+            public string DeviceId { get; set; } = string.Empty;
 
             public int BuildingId { get; set; }
 

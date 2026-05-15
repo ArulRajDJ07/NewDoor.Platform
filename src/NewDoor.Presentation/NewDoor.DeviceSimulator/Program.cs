@@ -14,6 +14,7 @@ builder.Services.AddHttpClient<ApiClientService>(client =>
     client.BaseAddress = new Uri(baseUrl);
 });
 
+builder.Services.AddSingleton<AuthenticationService>();
 builder.Services.AddSingleton<DeviceService>();
 builder.Services.AddSingleton<EventBufferService>();
 builder.Services.AddSingleton<TelemetryGeneratorService>();
@@ -27,6 +28,11 @@ if (!app.Environment.IsDevelopment())
     app.UseExceptionHandler("/Error", createScopeForErrors: true);
     app.UseHsts();
 }
+else
+{
+    app.UseDeveloperExceptionPage();
+}
+
 app.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages: true);
 app.UseHttpsRedirection();
 

@@ -1,0 +1,239 @@
+@using NewDoor.Web.Services
+@inject EventBufferService EventBuffer
+@implements IDisposable
+
+<div class="event-console">
+    <div class="console-header">
+        <h3 class="console-title">LIVE EVENT STREAM</h3>
+        <span class="event-count">@events.Count events</span>
+    </div>
+
+    @if (!events.Any())
+    {
+        <div class="empty-state">No events yet. Start simulation to see live events.</div>
+    }
+    else
+    {
+        <div class="events-table">
+            <div class="table-header">
+                <div class="col-number">#</div>
+                <div class="col-time">Time</div>
+                <div class="col-building">Building</div>
+                <div class="col-device">Device</div>
+                <div class="col-event">Event Type</div>
+                <div class="col-status">Status</div>
+            </div>
+            <div class="table-body">
+                @{ var rowNumber = 1; }
+                @foreach (var evt in events)
+                {
+                    <div class="table-row">
+                        <div class="col-number">@rowNumber</div>
+                        <div class="col-time">@evt.Timestamp.ToString("HH:mm:ss")</div>
+                        <div class="col-building">@evt.BuildingName</div>
+                        <div class="col-device">@evt.DeviceId</div>
+                        <div class="col-event">@evt.EventType</div>
+                        <div class="col-status">
+                            <span class="status-badge @evt.Status.ToLower()">@evt.Status</span>
+                        </div>
+                    </div>
+                    rowNumber++;
+                }
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private List<EventLogModel> events = new();
+    private System.Threading.Timer? _timer;
+
+    protected override void OnInitialized()
+    {
+        EventBuffer.OnEventsUpdated += OnEventsUpdated;
+        _timer = new System.Threading.Timer(_ => InvokeAsync(UpdateEvents), null, 0, 500);
+    }
+
+    private void OnEventsUpdated()
+    {
+        InvokeAsync(UpdateEvents);
+    }
+
+    private void UpdateEvents()
+    {
+        events = EventBuffer.GetLatestEvents();
+        StateHasChanged();
+    }
+
+    public void Dispose()
+    {
+        EventBuffer.OnEventsUpdated -= OnEventsUpdated;
+        _timer?.Dispose();
+    }
+}
+
+<style>
+    .event-console {
+        background: #ffffff;
+        border-radius: 6px;
+        padding: 12px;
+        border: 1px solid #e0e0e0;
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+        overflow: hidden;
+    }
+
+    .console-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 10px;
+        flex-shrink: 0;
+    }
+
+    .console-title {
+        font-size: 14px;
+        font-weight: 700;
+        color: #0066cc;
+        margin: 0;
+        letter-spacing: 0.3px;
+    }
+
+    .event-count {
+        font-size: 12px;
+        font-weight: 600;
+        color: #666666;
+        padding: 4px 10px;
+        background: #f0f7ff;
+        border-radius: 12px;
+        border: 1px solid #d0e7ff;
+    }
+
+    .empty-state {
+        text-align: center;
+        padding: 30px;
+        color: #999999;
+        font-size: 13px;
+    }
+
+    .events-table {
+        flex: 1;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+    }
+
+    .table-header {
+        display: grid;
+        grid-template-columns: 40px 70px 140px 120px 120px 85px;
+        gap: 8px;
+        padding: 7px 8px;
+        background: #f5f5f5;
+        border-radius: 4px;
+        font-size: 10px;
+        font-weight: 600;
+        color: #666666;
+        text-transform: uppercase;
+        letter-spacing: 0.3px;
+        flex-shrink: 0;
+    }
+
+    .table-body {
+        flex: 1;
+        overflow-y: auto;
+        margin-top: 6px;
+        min-height: 0;
+    }
+
+    .table-row {
+        display: grid;
+        grid-template-columns: 40px 70px 140px 120px 120px 85px;
+        gap: 8px;
+        padding: 7px 8px;
+        background: #f9f9f9;
+        border-radius: 3px;
+        margin-bottom: 4px;
+        border: 1px solid #e0e0e0;
+        font-size: 11px;
+        color: #333333;
+        align-items: center;
+    }
+
+    .table-row:hover {
+        background: #f0f0f0;
+    }
+
+    .col-number {
+        color: #999999;
+        font-weight: 600;
+        text-align: center;
+        font-size: 10px;
+    }
+
+    .col-time {
+        color: #666666;
+        font-family: 'Courier New', monospace;
+        font-size: 10px;
+    }
+
+    .col-building,
+    .col-device,
+    .col-event {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .status-badge {
+        padding: 2px 6px;
+        border-radius: 3px;
+        font-size: 9px;
+        font-weight: 600;
+        text-transform: uppercase;
+    }
+
+    .status-badge.online {
+        background: #d1fae5;
+        color: #065f46;
+    }
+
+    .status-badge.alarm {
+        background: #fee2e2;
+        color: #991b1b;
+    }
+
+    .status-badge.warning {
+        background: #fef3c7;
+        color: #92400e;
+    }
+
+    .status-badge.offline {
+        background: #f3f4f6;
+        color: #6b7280;
+    }
+
+    .status-badge.failure {
+        background: #fee2e2;
+        color: #7f1d1d;
+    }
+
+    .table-body::-webkit-scrollbar {
+        width: 6px;
+    }
+
+    .table-body::-webkit-scrollbar-track {
+        background: #f5f5f5;
+    }
+
+    .table-body::-webkit-scrollbar-thumb {
+        background: #cccccc;
+        border-radius: 3px;
+    }
+
+    .table-body::-webkit-scrollbar-thumb:hover {
+        background: #999999;
+    }
+</style>

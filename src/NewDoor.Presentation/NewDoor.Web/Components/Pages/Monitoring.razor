@@ -1,0 +1,46 @@
+@page "/monitoring"
+@rendermode InteractiveServer
+
+<PageTitle>Monitoring</PageTitle>
+
+<MonitoringGrid 
+    TotalBuildings="5"
+    TotalDevices="15"
+    ActiveAlerts="6"
+    OfflineDevices="2"
+    TotalEvents="0"
+    IsConnected="false"
+    Alarms="@alarms"
+    Incidents="@incidents"
+    Events="@events" />
+
+@code {
+    private List<MonitoringGrid.AlarmItem> alarms = new();
+    private List<MonitoringGrid.IncidentItem> incidents = new();
+    private List<MonitoringGrid.EventItem> events = new();
+
+    protected override void OnInitialized()
+    {
+        // Sample alarm data
+        alarms = new()
+        {
+            new() { DeviceId = "", Building = "", Message = "", Severity = "High", Status = "Active", TimeAgo = "0s ago" },
+            new() { DeviceId = "", Building = "", Message = "", Severity = "High", Status = "Active", TimeAgo = "1s ago" },
+            new() { DeviceId = "", Building = "", Message = "", Severity = "High", Status = "Active", TimeAgo = "2s ago" },
+            new() { DeviceId = "", Building = "", Message = "", Severity = "High", Status = "Active", TimeAgo = "3s ago" },
+            new() { DeviceId = "", Building = "", Message = "", Severity = "High", Status = "Active", TimeAgo = "5s ago" },
+            new() { DeviceId = "", Building = "", Message = "", Severity = "High", Status = "Active", TimeAgo = "5s ago" }
+        };
+
+        // Sample incident data
+        incidents = new()
+        {
+            new() { Type = "Unknown", RootCause = "Under investigation", Severity = "High", Status = "Active", TriggeredRule = "N/A", TimeAgo = "0s ago" },
+            new() { Type = "Unknown", RootCause = "Under investigation", Severity = "High", Status = "Active", TriggeredRule = "N/A", TimeAgo = "0s ago" },
+            new() { Type = "Unknown", RootCause = "Under investigation", Severity = "High", Status = "Active", TriggeredRule = "N/A", TimeAgo = "2s ago" },
+            new() { Type = "Unknown", RootCause = "Under investigation", Severity = "High", Status = "Active", TriggeredRule = "N/A", TimeAgo = "4s ago" },
+            new() { Type = "Unknown", RootCause = "Under investigation", Severity = "High", Status = "Active", TriggeredRule = "N/A", TimeAgo = "5s ago" },
+            new() { Type = "Unknown", RootCause = "Under investigation", Severity = "High", Status = "Active", TriggeredRule = "N/A", TimeAgo = "9s ago" }
+        };
+    }
+}

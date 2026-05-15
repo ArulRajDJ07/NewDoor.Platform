@@ -1,0 +1,649 @@
+@page "/"
+@page "/dashboard"
+@rendermode InteractiveServer
+@using NewDoor.Web.Services
+@using NewDoor.Web.Models
+@inject DeviceService DeviceService
+@inject SimulationEngineService SimulationEngine
+@inject EventBufferService EventBuffer
+@inject SignalRService SignalRService
+@inject ApiClientService ApiClient
+@implements IAsyncDisposable
+
+<PageTitle>Dashboard - Live Monitoring</PageTitle>
+
+<div class="dashboard-container">
+    <HeaderBar />
+
+    <div class="main-content">
+        <div class="metrics-row">
+            <MetricsPanel />
+        </div>
+
+        <!-- Live Monitoring Section -->
+        <div class="live-monitoring-section">
+            <div class="section-header">
+                <div class="header-left">
+                    <h3>LIVE MONITORING</h3>
+                    <span class="connection-badge @GetConnectionClass()">
+                        @GetConnectionText()
+                    </span>
+                </div>
+                <div class="header-right">
+                    <span class="stat-badge">
+                        Alarms: <strong>@liveAlarms.Count</strong>
+                    </span>
+                    <span class="stat-badge">
+                        Incidents: <strong>@liveIncidents.Count</strong>
+                    </span>
+                </div>
+            </div>
+
+            <div class="grid-container">
+                <!-- Alarms Grid -->
+                <div class="grid-panel">
+                    <div class="grid-header alarms-header">
+                        <span>Alarms</span>
+                    </div>
+                    <div class="grid-table">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Device ID</th>
+                                    <th>Building</th>
+                                    <th>Message</th>
+                                    <th>Severity</th>
+                                    <th>Status</th>
+                                    <th>Time</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @if (!liveAlarms.Any())
+                                {
+                                    <tr>
+                                        <td colspan="6" class="empty-state">No alarms yet</td>
+                                    </tr>
+                                }
+                                else
+                                {
+                                    @foreach (var alarm in liveAlarms.Take(10))
+                                    {
+                                        <tr class="@(alarm.IsNew ? "new-row" : "")">
+                                            <td>@alarm.Alert.DeviceId</td>
+                                            <td>@GetBuildingDisplay(alarm.Alert)</td>
+                                            <td class="message-cell">@alarm.Alert.Message</td>
+                                            <td>
+                                                <span class="severity-badge @GetSeverityClass(alarm.Alert.Severity)">
+                                                    @alarm.Alert.Severity
+                                                </span>
+                                            </td>
+                                            <td>@GetAlarmStatus(alarm.Alert)</td>
+                                            <td class="time-cell">@GetRelativeTime(alarm.ReceivedAt)</td>
+                                        </tr>
+                                    }
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Incidents Grid -->
+                <div class="grid-panel">
+                    <div class="grid-header incidents-header">
+                        <span>Incidents</span>
+                    </div>
+                    <div class="grid-table">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Incident Type</th>
+                                    <th>Root Cause</th>
+                                    <th>Severity</th>
+                                    <th>Status</th>
+                                    <th>Triggered Rule</th>
+                                    <th>Time</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @if (!liveIncidents.Any())
+                                {
+                                    <tr>
+                                        <td colspan="6" class="empty-state">No incidents yet</td>
+                                    </tr>
+                                }
+                                else
+                                {
+                                    @foreach (var incident in liveIncidents.Take(10))
+                                    {
+                                        <tr class="@(incident.IsNew ? "new-row" : "")">
+                                            <td>@GetIncidentType(incident.Alert)</td>
+                                            <td class="message-cell">@GetRootCause(incident.Alert)</td>
+                                            <td>
+                                                <span class="severity-badge @GetSeverityClass(incident.Alert.Severity)">
+                                                    @incident.Alert.Severity
+                                                </span>
+                                            </td>
+                                            <td>@GetIncidentStatus(incident.Alert)</td>
+                                            <td>@GetTriggeredRule(incident.Alert)</td>
+                                            <td class="time-cell">@GetRelativeTime(incident.ReceivedAt)</td>
+                                        </tr>
+                                    }
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Events Grid -->
+                <div class="grid-panel">
+                    <div class="grid-header events-header">
+                        <span>Live Event Stream</span>
+                    </div>
+                    <div class="grid-table">
+                        <EventConsole />
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+                @code {
+                    private List<IncidentNotification> liveIncidents = new();
+                    private List<AlarmNotification> liveAlarms = new();
+                    private ConnectionState connectionState = ConnectionState.Disconnected;
+
+                    protected override async Task OnInitializedAsync()
+                    {
+                        await DeviceService.LoadDataAsync();
+
+                        // Load initial alarms and incidents from database
+                        await LoadInitialDataAsync();
+
+                        // Subscribe to SignalR events
+                        SignalRService.OnIncidentReceived += HandleIncidentReceived;
+                        SignalRService.OnAlarmReceived += HandleAlarmReceived;
+                        SignalRService.OnConnectionStateChanged += HandleConnectionStateChanged;
+
+                        // Start SignalR connection
+                        if (!SignalRService.IsConnected)
+                        {
+                            await SignalRService.StartAsync();
+                        }
+                    }
+
+                    private async Task LoadInitialDataAsync()
+                    {
+                        try
+                        {
+                            // Load recent alarms (last 10)
+                            var alarms = await ApiClient.GetAllAlarmsAsync();
+                            var recentAlarms = alarms
+                                .OrderByDescending(a => a.TriggeredUtc)
+                                .Take(10)
+                                .ToList();
+
+                            foreach (var alarm in recentAlarms)
+                            {
+                                var building = DeviceService.GetBuilding(alarm.BuildingId);
+                                var dashboardAlert = new DashboardAlert
+                                {
+                                    AlertId = alarm.AlarmCode,
+                                    DeviceId = alarm.DeviceId,
+                                    DeviceName = "Sensor Device",
+                                    BuildingCode = building?.BuildingCode ?? $"BLD-{alarm.BuildingId}",
+                                    Location = $"{building?.Name ?? "Unknown"}",
+                                    Severity = alarm.Severity,
+                                    Message = alarm.AlarmMessage,
+                                    Timestamp = alarm.TriggeredUtc,
+                                    AdditionalData = new Dictionary<string, object>
+                                    {
+                                        { "BuildingId", alarm.BuildingId },
+                                        { "RuleId", alarm.RuleId },
+                                        { "AlarmStatus", alarm.AlarmStatus }
+                                    }
+                                };
+
+                                liveAlarms.Add(new AlarmNotification
+                                {
+                                    Alert = dashboardAlert,
+                                    ReceivedAt = alarm.TriggeredUtc,
+                                    IsNew = false
+                                });
+                            }
+
+                            // Load recent incidents (last 10)
+                            var incidents = await ApiClient.GetAllIncidentsAsync();
+                            var recentIncidents = incidents
+                                .OrderByDescending(i => i.StartedUtc)
+                                .Take(10)
+                                .ToList();
+
+                            foreach (var incident in recentIncidents)
+                            {
+                                var building = DeviceService.GetBuilding(incident.BuildingId);
+                                var dashboardAlert = new DashboardAlert
+                                {
+                                    AlertId = incident.IncidentCode,
+                                    DeviceId = incident.DeviceId ?? "Unknown",
+                                    DeviceName = "Sensor Device",
+                                    BuildingCode = building?.BuildingCode ?? $"BLD-{incident.BuildingId}",
+                                    Location = $"{building?.Name ?? "Unknown"}",
+                                    Severity = incident.Severity,
+                                    Message = incident.Summary,
+                                    Timestamp = incident.StartedUtc,
+                                    AdditionalData = new Dictionary<string, object>
+                                    {
+                                        { "BuildingId", incident.BuildingId },
+                                        { "IncidentType", incident.IncidentType },
+                                        { "RootCause", incident.RootCause },
+                                        { "Status", incident.Status },
+                                        { "RuleName", incident.TriggeredByRule ? "System Rule" : "N/A" }
+                                    }
+                                };
+
+                                liveIncidents.Add(new IncidentNotification
+                                {
+                                    Alert = dashboardAlert,
+                                    ReceivedAt = incident.StartedUtc,
+                                    IsNew = false
+                                });
+                            }
+
+                            StateHasChanged();
+                        }
+                        catch (Exception ex)
+                        {
+                            // Log error but don't crash the app
+                            Console.WriteLine($"Error loading initial data: {ex.Message}");
+                        }
+                    }
+
+    private void HandleIncidentReceived(object? sender, IncidentNotification notification)
+    {
+        liveIncidents.Insert(0, notification);
+        if (liveIncidents.Count > 10)
+            liveIncidents = liveIncidents.Take(10).ToList();
+
+        InvokeAsync(StateHasChanged);
+
+        // Mark as not new after 5 seconds
+        _ = Task.Run(async () =>
+        {
+            await Task.Delay(5000);
+            notification.IsNew = false;
+            await InvokeAsync(StateHasChanged);
+        });
+    }
+
+    private void HandleAlarmReceived(object? sender, AlarmNotification notification)
+    {
+        liveAlarms.Insert(0, notification);
+        if (liveAlarms.Count > 10)
+            liveAlarms = liveAlarms.Take(10).ToList();
+
+        InvokeAsync(StateHasChanged);
+
+        // Mark as not new after 5 seconds
+        _ = Task.Run(async () =>
+        {
+            await Task.Delay(5000);
+            notification.IsNew = false;
+            await InvokeAsync(StateHasChanged);
+        });
+    }
+
+    private void HandleConnectionStateChanged(object? sender, ConnectionStateChangedEventArgs e)
+    {
+        connectionState = e.State;
+        InvokeAsync(StateHasChanged);
+    }
+
+    private string GetConnectionClass()
+    {
+        return connectionState switch
+        {
+            ConnectionState.Connected => "connected",
+            ConnectionState.Connecting => "connecting",
+            ConnectionState.Reconnecting => "reconnecting",
+            ConnectionState.Failed => "failed",
+            _ => "disconnected"
+        };
+    }
+
+    private string GetConnectionText()
+    {
+        return connectionState switch
+        {
+            ConnectionState.Connected => "● LIVE",
+            ConnectionState.Connecting => "○ Connecting...",
+            ConnectionState.Reconnecting => "○ Reconnecting...",
+            ConnectionState.Failed => "× Failed",
+            _ => "○ Disconnected"
+        };
+    }
+
+    private string GetSeverityClass(string severity)
+    {
+        return severity?.ToLower() switch
+        {
+            "critical" => "severity-critical",
+            "high" => "severity-high",
+            "medium" => "severity-medium",
+            "low" => "severity-low",
+            _ => "severity-info"
+        };
+    }
+
+    private string GetRelativeTime(DateTime timestamp)
+    {
+        var diff = DateTime.UtcNow - timestamp;
+        if (diff.TotalSeconds < 60)
+            return $"{(int)diff.TotalSeconds}s ago";
+        if (diff.TotalMinutes < 60)
+            return $"{(int)diff.TotalMinutes}m ago";
+        if (diff.TotalHours < 24)
+            return $"{(int)diff.TotalHours}h ago";
+        return timestamp.ToString("MMM dd HH:mm");
+    }
+
+    private string GetBuildingDisplay(DashboardAlert alert)
+    {
+        if (alert.AdditionalData.TryGetValue("BuildingId", out var buildingIdObj))
+        {
+            return $"{alert.BuildingCode} ({buildingIdObj})";
+        }
+        return alert.BuildingCode;
+    }
+
+    private string GetAlarmStatus(DashboardAlert alert)
+    {
+        if (alert.AdditionalData.TryGetValue("AlarmStatus", out var statusObj))
+        {
+            return statusObj?.ToString() ?? "Active";
+        }
+        return "Active";
+    }
+
+    private string GetIncidentStatus(DashboardAlert alert)
+    {
+        if (alert.AdditionalData.TryGetValue("Status", out var statusObj))
+        {
+            return statusObj?.ToString() ?? "Active";
+        }
+        return "Active";
+    }
+
+    private string GetIncidentType(DashboardAlert alert)
+    {
+        if (alert.AdditionalData.TryGetValue("IncidentType", out var typeObj))
+        {
+            return typeObj?.ToString() ?? "Unknown";
+        }
+        return "Unknown";
+    }
+
+    private string GetRootCause(DashboardAlert alert)
+    {
+        if (alert.AdditionalData.TryGetValue("RootCause", out var causeObj))
+        {
+            return causeObj?.ToString() ?? "Under investigation";
+        }
+        return "Under investigation";
+    }
+
+    private string GetTriggeredRule(DashboardAlert alert)
+    {
+        if (alert.AdditionalData.TryGetValue("RuleName", out var ruleObj))
+        {
+            return ruleObj?.ToString() ?? "N/A";
+        }
+        return "N/A";
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        SignalRService.OnIncidentReceived -= HandleIncidentReceived;
+        SignalRService.OnAlarmReceived -= HandleAlarmReceived;
+        SignalRService.OnConnectionStateChanged -= HandleConnectionStateChanged;
+    }
+}
+
+<style>
+    .dashboard-container {
+        display: flex;
+        flex-direction: column;
+        height: 100vh;
+        background: #f5f5f5;
+        color: #333333;
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
+
+    .main-content {
+        display: flex;
+        flex-direction: column;
+        flex: 1;
+        overflow: hidden;
+        padding: 10px 15px;
+        gap: 10px;
+    }
+
+    /* Row 1: Metrics Cards */
+    .metrics-row {
+        flex-shrink: 0;
+    }
+
+    /* Live Monitoring Section */
+    .live-monitoring-section {
+        flex: 1;
+        background: white;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+    }
+
+    .section-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 12px 20px;
+        background: white;
+        border-bottom: 1px solid #ddd;
+    }
+
+    .header-left h3 {
+        margin: 0;
+        font-size: 16px;
+        font-weight: 600;
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        color: #333;
+    }
+
+    .connection-badge {
+        display: inline-block;
+        padding: 4px 12px;
+        border-radius: 4px;
+        font-size: 11px;
+        font-weight: 500;
+        margin-left: 10px;
+    }
+
+    .connection-badge.connected {
+        background: #10b981;
+        color: white;
+    }
+
+    .connection-badge.connecting,
+    .connection-badge.reconnecting {
+        background: #f59e0b;
+        color: white;
+    }
+
+    .connection-badge.failed,
+    .connection-badge.disconnected {
+        background: #ef4444;
+        color: white;
+    }
+
+    .header-right {
+        display: flex;
+        gap: 15px;
+    }
+
+    .stat-badge {
+        font-size: 13px;
+        color: #666;
+    }
+
+    .stat-badge strong {
+        font-weight: 700;
+        color: #333;
+    }
+
+    /* Grid Container */
+    .grid-container {
+        display: flex;
+        flex-direction: column;
+        gap: 0;
+        flex: 1;
+        overflow: hidden;
+        border-top: 1px solid #ddd;
+    }
+
+    .grid-panel {
+        display: flex;
+        flex-direction: column;
+        border-bottom: 1px solid #ddd;
+        overflow: hidden;
+        flex: 1;
+    }
+
+    .grid-panel:last-child {
+        border-bottom: none;
+    }
+
+    .grid-header {
+        padding: 10px 15px;
+        font-weight: 600;
+        font-size: 13px;
+        color: white;
+        border-bottom: 1px solid rgba(0,0,0,0.1);
+    }
+
+    .alarms-header {
+        background: #6b7280;
+    }
+
+    .incidents-header {
+        background: #6b7280;
+    }
+
+    .events-header {
+        background: #6b7280;
+    }
+
+    .grid-table {
+        flex: 1;
+        overflow-y: auto;
+    }
+
+    .data-table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+    .data-table th {
+        background: #b8b8b8;
+        padding: 8px 12px;
+        text-align: left;
+        font-weight: 600;
+        font-size: 0.75rem;
+        color: #333;
+        text-transform: uppercase;
+        border-bottom: none;
+        position: sticky;
+        top: 0;
+        z-index: 1;
+    }
+
+    .data-table td {
+        padding: 8px 12px;
+        border-bottom: none;
+        font-size: 0.85rem;
+    }
+
+    .data-table tbody tr {
+        background: white;
+    }
+
+    .data-table tbody tr:nth-child(even) {
+        background: #e8e8e8;
+    }
+
+    .data-table tbody tr:hover {
+        background-color: #d0d0d0;
+    }
+
+    .data-table tbody tr.new-row {
+        background: #b3d9ff;
+    }
+
+    .data-table tbody tr.new-row:nth-child(even) {
+        background: #b3d9ff;
+    }
+
+    .empty-state {
+        text-align: center;
+        color: #6c757d;
+        padding: 30px;
+        font-style: italic;
+    }
+
+    .message-cell {
+        max-width: 250px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .time-cell {
+        color: #6c757d;
+        font-size: 0.8rem;
+        white-space: nowrap;
+    }
+
+    .severity-badge {
+        padding: 4px 12px;
+        border-radius: 3px;
+        font-size: 0.7rem;
+        font-weight: 600;
+        text-transform: uppercase;
+    }
+
+    .severity-badge.severity-critical {
+        background: #dc3545;
+        color: white;
+    }
+
+    .severity-badge.severity-high {
+        background: #fd7e14;
+        color: white;
+    }
+
+    .severity-badge.severity-medium {
+        background: #ffc107;
+        color: #333;
+    }
+
+    .severity-badge.severity-low {
+        background: #28a745;
+        color: white;
+    }
+
+    .severity-badge.severity-info {
+        background: #17a2b8;
+        color: white;
+    }
+</style>

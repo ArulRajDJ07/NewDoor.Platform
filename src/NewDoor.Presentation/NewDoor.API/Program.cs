@@ -12,12 +12,8 @@ using NewDoor.API.Features.MetaModel.Mapper;
 using NewDoor.API.Features.User.Mapper;
 using NewDoor.API.Services;
 using NewDoor.API.Settings;
-using NewDoor.EventBus.Consumers;
-using NewDoor.EventBus.Producers;
-using NewDoor.API.Models;
-using NewDoor.API.Handlers;
+using NewDoor.API.Configuration;
 using NewDoor.API.Hubs;
-using NewDoor.API.BackgroundServices;
 using Serilog;
 using ApplicationSettings = NewDoor.API.Settings.ApplicationSettings;
 
@@ -35,6 +31,10 @@ namespace NewDoor.API
                     .ReadFrom.Configuration(builder.Configuration)
                     .Enrich.FromLogContext()
                     .WriteTo.Console()
+                    .WriteTo.File(
+                        path: "logs/log-.txt",
+                        rollingInterval: RollingInterval.Day,
+                        outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level:u3}] {Message:lj}{NewLine}{Exception}")
                     .CreateLogger();
 
                 builder.Host.UseSerilog();
@@ -58,39 +58,8 @@ namespace NewDoor.API
 
                 builder.Services.AddSignalR();
 
-                builder.Services.AddSingleton<KafkaConsumerConfig>(sp =>
-                {
-                    var config = sp.GetRequiredService<IConfiguration>();
-                    return new KafkaConsumerConfig
-                    {
-                        BootstrapServers = config["Kafka:BootstrapServers"] ?? "localhost:9092",
-                        Username = config["Kafka:Username"] ?? "",
-                        Password = config["Kafka:Password"] ?? "",
-                        GroupId = config["Kafka:GroupId"] ?? "api-consumer-group"
-                    };
-                });
-
-                // Register Kafka message handlers and consumers using KEYED SERVICE PATTERN
-
-                // UI Broadcast Consumer
-                builder.Services.AddSingleton<IKafkaMessageHandler<UIBroadcastEvent>, UIBroadcastMessageHandler>();
-                builder.Services.AddKeyedSingleton<IKafkaConsumer, KafkaConsumer<UIBroadcastEvent>>("UIBroadcast");
-                builder.Services.AddHostedService<UIBroadcastConsumerService>();
-
-                // Incident Created Consumer
-                builder.Services.AddSingleton<IKafkaMessageHandler<IncidentCreatedEvent>, IncidentCreatedMessageHandler>();
-                builder.Services.AddKeyedSingleton<IKafkaConsumer, KafkaConsumer<IncidentCreatedEvent>>("IncidentCreated");
-                builder.Services.AddHostedService<IncidentCreatedConsumerService>();
-
-                // Alarm Created Consumer
-                builder.Services.AddSingleton<IKafkaMessageHandler<AlarmCreatedEvent>, AlarmCreatedMessageHandler>();
-                builder.Services.AddKeyedSingleton<IKafkaConsumer, KafkaConsumer<AlarmCreatedEvent>>("AlarmCreated");
-                builder.Services.AddHostedService<AlarmCreatedConsumerService>();
-
-                // Audit History Consumer
-                builder.Services.AddSingleton<IKafkaMessageHandler<AuditHistoryEvent>, AuditHistoryMessageHandler>();
-                builder.Services.AddKeyedSingleton<IKafkaConsumer, KafkaConsumer<AuditHistoryEvent>>("AuditHistory");
-                builder.Services.AddHostedService<AuditHistoryConsumerService>();
+                // Register all Kafka consumers using keyed service pattern
+                builder.Services.AddKafkaConsumers(builder.Configuration);
 
                 builder.WebHost.AddApplicationConfiguration<ApplicationSettings>();
 

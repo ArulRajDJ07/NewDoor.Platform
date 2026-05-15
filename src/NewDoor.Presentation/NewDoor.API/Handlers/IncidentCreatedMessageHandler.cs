@@ -5,6 +5,7 @@ using NewDoor.API.Hubs;
 using NewDoor.API.Models;
 using NewDoor.API.Features.Incidents.Command;
 using NewDoor.Platform.DTO.Features.Incidents.Models;
+using NewDoor.API.Repositories.Interface;
 
 namespace NewDoor.API.Handlers;
 
@@ -35,15 +36,11 @@ public class IncidentCreatedMessageHandler : IKafkaMessageHandler<IncidentCreate
 
         try
         {
-            _logger.LogInformation("Received incident.created event: {IncidentCode}", message.IncidentCode);
-
-            // 1. Store in database using CQRS command
+            // 1. Store in database using CQRS command (with fallback inside)
             var incidentResponse = await StoreIncidentAsync(mediator, message, cancellationToken);
 
             // 2. Broadcast to UI via SignalR
             await BroadcastIncidentToUIAsync(hubContext, incidentResponse, message, cancellationToken);
-
-            _logger.LogInformation("Incident {IncidentCode} stored and broadcasted", message.IncidentCode);
         }
         catch (Exception ex)
         {
@@ -56,53 +53,103 @@ public class IncidentCreatedMessageHandler : IKafkaMessageHandler<IncidentCreate
     #region Private Methods
     private async Task<IncidentResponse> StoreIncidentAsync(IMediator mediator, IncidentCreatedEvent message, CancellationToken cancellationToken)
     {
-        var addIncidentRequest = new AddIncidentRequest
+        try
         {
-            IncidentCode = message.IncidentCode,
-            BuildingId = message.BuildingId,
-            IncidentType = message.IncidentType,
-            Severity = message.Severity,
-            Status = message.Status,
-            StartedUtc = message.StartedUtc,
-            Summary = message.Summary,
-            RootCause = message.RootCause,
-            TriggeredByRule = message.TriggeredByRule,
-            EventCount = message.EventCount
-        };
+            // Check if incident already exists
+            using var scope = _serviceScopeFactory.CreateScope();
+            var incidentRepository = scope.ServiceProvider.GetRequiredService<IIncidentRepository>();
 
-        var command = new AddIncidentCommand(addIncidentRequest);
-        var result = await mediator.Send(command, cancellationToken);
+            var existingIncident = await incidentRepository.GetByIncidentCodeAsync(message.IncidentCode);
 
-        _logger.LogInformation("Incident stored in database: Id={Id}, Code={Code}", result.Id, result.IncidentCode);
+            if (existingIncident != null)
+            {
+                return new IncidentResponse
+                {
+                    Id = existingIncident.Id,
+                    IncidentCode = existingIncident.IncidentCode,
+                    BuildingId = existingIncident.BuildingId,
+                    DeviceId = existingIncident.DeviceId,
+                    IncidentType = existingIncident.IncidentType,
+                    Severity = existingIncident.Severity,
+                    Status = existingIncident.Status,
+                    StartedUtc = existingIncident.StartedUtc,
+                    Summary = existingIncident.Summary,
+                    RootCause = existingIncident.RootCause
+                };
+            }
 
-        return result;
+            var addIncidentRequest = new AddIncidentRequest
+            {
+                IncidentCode = message.IncidentCode,
+                BuildingId = message.BuildingId,
+                DeviceId = message.DeviceId,
+                IncidentType = message.IncidentType,
+                Severity = message.Severity,
+                Status = message.Status,
+                StartedUtc = message.StartedUtc,
+                Summary = message.Summary,
+                RootCause = message.RootCause,
+                TriggeredByRule = message.TriggeredByRule,
+                EventCount = message.EventCount
+            };
+
+            var command = new AddIncidentCommand(addIncidentRequest);
+            return await mediator.Send(command, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "DB error for incident {Code} - using fallback", message.IncidentCode);
+
+            return new IncidentResponse
+            {
+                IncidentCode = message.IncidentCode,
+                BuildingId = message.BuildingId,
+                DeviceId = message.DeviceId,
+                IncidentType = message.IncidentType,
+                Severity = message.Severity,
+                Status = message.Status,
+                StartedUtc = message.StartedUtc,
+                Summary = message.Summary,
+                RootCause = message.RootCause
+            };
+        }
     }
 
     private async Task BroadcastIncidentToUIAsync(IHubContext<NotificationHub> hubContext, IncidentResponse incident, IncidentCreatedEvent message, CancellationToken cancellationToken)
     {
         var floor = message.TelemetryData.TryGetValue("Floor", out var floorValue) 
-            ? floorValue?.ToString() ?? "" 
-            : "";
+            ? floorValue?.ToString() ?? "Unknown" 
+            : "Unknown";
         var zone = message.TelemetryData.TryGetValue("Zone", out var zoneValue) 
-            ? zoneValue?.ToString() ?? "" 
-            : "";
+            ? zoneValue?.ToString() ?? "Unknown" 
+            : "Unknown";
+        var ruleName = message.TelemetryData.TryGetValue("RuleName", out var ruleValue)
+            ? ruleValue?.ToString() ?? "N/A"
+            : "N/A";
+
+        // Create a meaningful message if Summary is empty
+        var displayMessage = !string.IsNullOrWhiteSpace(incident.Summary) 
+            ? incident.Summary 
+            : $"{incident.IncidentType} detected - {incident.Severity} severity";
 
         var dashboardAlert = new DashboardAlert
         {
             AlertId = incident.IncidentCode,
-            DeviceId = message.DeviceId,
-            DeviceName = message.DeviceName,
-            BuildingCode = message.BuildingCode,
+            DeviceId = message.DeviceId ?? "Unknown",
+            DeviceName = message.DeviceName ?? "Unknown Device",
+            BuildingCode = message.BuildingCode ?? "Unknown",
             Location = $"{floor} / {zone}",
             Severity = incident.Severity,
-            Message = incident.Summary,
+            Message = displayMessage,
             Timestamp = incident.StartedUtc,
             AdditionalData = new Dictionary<string, object>
             {
                 { "IncidentId", incident.Id },
                 { "IncidentType", incident.IncidentType },
                 { "Status", incident.Status },
-                { "RootCause", incident.RootCause },
+                { "RootCause", incident.RootCause ?? "Under investigation" },
+                { "TriggeredByRule", message.TriggeredByRule },
+                { "RuleName", ruleName },
                 { "ConfidenceScore", message.ConfidenceScore },
                 { "TelemetryData", message.TelemetryData }
             }
@@ -117,8 +164,6 @@ public class IncidentCreatedMessageHandler : IKafkaMessageHandler<IncidentCreate
             var groupName = $"Building_{incident.BuildingId}";
             await hubContext.Clients.Group(groupName).SendAsync("ReceiveIncident", dashboardAlert, cancellationToken);
         }
-
-        _logger.LogInformation("Incident broadcasted to UI: {IncidentCode}", incident.IncidentCode);
     }
     #endregion
 }
