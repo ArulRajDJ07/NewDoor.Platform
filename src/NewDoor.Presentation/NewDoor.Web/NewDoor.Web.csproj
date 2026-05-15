@@ -12,6 +12,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.SignalR.Client" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\..\NewDoor.PlatformShared\NewDoor.Platform.DTO\NewDoor.Platform.DTO.csproj" />
   </ItemGroup>
 

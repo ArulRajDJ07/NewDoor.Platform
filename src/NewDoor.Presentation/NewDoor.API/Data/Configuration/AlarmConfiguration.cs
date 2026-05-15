@@ -21,7 +21,7 @@
                    .HasMaxLength(100);
 
                builder.Property(x => x.DeviceId)
-                   .IsRequired();
+                   .HasMaxLength(100);
 
                builder.Property(x => x.BuildingId)
                    .IsRequired();
@@ -54,11 +54,6 @@
                    .HasMaxLength(1000);
 
                // Relationships
-               builder.HasOne(x => x.Device)
-                   .WithMany()
-                   .HasForeignKey(x => x.DeviceId)
-                   .OnDelete(DeleteBehavior.Restrict);
-
                builder.HasOne(x => x.Building)
                    .WithMany()
                    .HasForeignKey(x => x.BuildingId)

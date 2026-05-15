@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using NewDoor.API.Data;
 
@@ -11,9 +12,11 @@ using NewDoor.API.Data;
 namespace NewDoor.API.Migrations
 {
     [DbContext(typeof(DoWhattaProductDBContext))]
-    partial class DoWhattaProductDBContextModelSnapshot : ModelSnapshot
+    [Migration("20260515020724_MakeDeviceIdNullableInEventsHistory")]
+    partial class MakeDeviceIdNullableInEventsHistory
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -54,10 +57,8 @@ namespace NewDoor.API.Migrations
                     b.Property<DateTimeOffset?>("CreatedAt")
                         .HasColumnType("datetimeoffset");
 
-                    b.Property<string>("DeviceId")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
+                    b.Property<int>("DeviceId")
+                        .HasColumnType("int");
 
                     b.Property<int?>("IncidentId")
                         .HasColumnType("int");
@@ -328,10 +329,8 @@ namespace NewDoor.API.Migrations
                     b.Property<DateTimeOffset?>("CreatedAt")
                         .HasColumnType("datetimeoffset");
 
-                    b.Property<string>("DeviceId")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
+                    b.Property<int>("DeviceId")
+                        .HasColumnType("int");
 
                     b.Property<string>("EventId")
                         .IsRequired()
@@ -479,11 +478,6 @@ namespace NewDoor.API.Migrations
                     b.Property<DateTimeOffset?>("CreatedAt")
                         .HasColumnType("datetimeoffset");
 
-                    b.Property<string>("DeviceId")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
                     b.Property<DateTime?>("EndedUtc")
                         .HasColumnType("datetime2");
 
@@ -535,8 +529,6 @@ namespace NewDoor.API.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("BuildingId");
-
-                    b.HasIndex("DeviceId");
 
                     b.HasIndex("IncidentCode")
                         .IsUnique();
@@ -683,6 +675,12 @@ namespace NewDoor.API.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("NewDoor.Platform.Entities.Device", "Device")
+                        .WithMany()
+                        .HasForeignKey("DeviceId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
                     b.HasOne("NewDoor.Platform.Entities.Incident", "Incident")
                         .WithMany("Alarms")
                         .HasForeignKey("IncidentId")
@@ -695,6 +693,8 @@ namespace NewDoor.API.Migrations
                         .IsRequired();
 
                     b.Navigation("Building");
+
+                    b.Navigation("Device");
 
                     b.Navigation("Incident");
 
@@ -709,7 +709,15 @@ namespace NewDoor.API.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("NewDoor.Platform.Entities.Device", "Device")
+                        .WithMany()
+                        .HasForeignKey("DeviceId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
                     b.Navigation("Building");
+
+                    b.Navigation("Device");
                 });
 
             modelBuilder.Entity("NewDoor.Platform.Entities.EventsHistory", b =>

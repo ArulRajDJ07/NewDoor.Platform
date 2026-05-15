@@ -19,10 +19,14 @@ builder.Services.AddSingleton<AuthenticationService>();
 builder.Services.AddSingleton<DeviceService>();
 builder.Services.AddSingleton<EventBufferService>();
 builder.Services.AddSingleton<TelemetryGeneratorService>();
-builder.Services.AddSingleton<TelemetryClientService>();
 builder.Services.AddSingleton<SimulationEngineService>();
+builder.Services.AddSingleton<SignalRService>();
 
 var app = builder.Build();
+
+// Initialize SignalR connection
+var signalRService = app.Services.GetRequiredService<SignalRService>();
+await signalRService.StartAsync();
 
 // Configure the HTTP request pipeline.
 if (!app.Environment.IsDevelopment())

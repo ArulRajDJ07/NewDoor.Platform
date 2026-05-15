@@ -9,7 +9,6 @@ public class SimulationEngineService
     private readonly DeviceService _deviceService;
     private readonly TelemetryGeneratorService _telemetryGenerator;
     private readonly EventBufferService _eventBuffer;
-    private readonly TelemetryClientService _telemetryClient;
     private readonly ILogger<SimulationEngineService> _logger;
 
     private CancellationTokenSource? _cancellationTokenSource;
@@ -30,13 +29,11 @@ public class SimulationEngineService
         DeviceService deviceService,
         TelemetryGeneratorService telemetryGenerator,
         EventBufferService eventBuffer,
-        TelemetryClientService telemetryClient,
         ILogger<SimulationEngineService> logger)
     {
         _deviceService = deviceService;
         _telemetryGenerator = telemetryGenerator;
         _eventBuffer = eventBuffer;
-        _telemetryClient = telemetryClient;
         _logger = logger;
     }
 
@@ -46,9 +43,6 @@ public class SimulationEngineService
         {
             return;
         }
-
-        _logger.LogInformation("Starting simulation: {EventsPerSecond} events/sec for {Duration} seconds", 
-            settings.EventsPerSecond, settings.DurationSeconds);
 
         _cancellationTokenSource = new CancellationTokenSource();
         _eventsGenerated = 0;
@@ -98,7 +92,6 @@ public class SimulationEngineService
         }
 
         var payload = _telemetryGenerator.GenerateTelemetry(device, building, eventType);
-        await _telemetryClient.PublishTelemetryAsync(payload);
 
         var eventLog = new EventLogModel
         {
@@ -129,7 +122,6 @@ public class SimulationEngineService
             DurationSeconds = 60
         };
 
-        _logger.LogInformation("Starting peak load test: 50,000 events/sec for 60 seconds");
         await StartSimulationAsync(settings);
     }
 
@@ -187,12 +179,9 @@ public class SimulationEngineService
                     }
                 }
             }
-
-            _logger.LogInformation("Simulation completed: {EventCount} events", _eventsGenerated);
         }
         catch (OperationCanceledException)
         {
-            _logger.LogInformation("Simulation stopped");
         }
         catch (Exception ex)
         {
@@ -246,18 +235,6 @@ public class SimulationEngineService
         var payload = eventType != null 
             ? _telemetryGenerator.GenerateTelemetry(device, building, eventType)
             : _telemetryGenerator.GenerateTelemetry(device, building);
-
-        _ = Task.Run(async () => 
-        {
-            try 
-            { 
-                await _telemetryClient.PublishTelemetryAsync(payload); 
-            } 
-            catch 
-            { 
-                // Errors already logged in TelemetryClientService
-            }
-        });
 
         var eventLog = new EventLogModel
         {

@@ -88,17 +88,30 @@ public class IncidentMessageHandler : IKafkaMessageHandler<IncidentEvent>
 
     private async Task PublishAuditHistoryAsync(IncidentEvent incident, CancellationToken cancellationToken)
     {
+        // Extract telemetry data from TelemetryData dictionary
+        var temperature = incident.TelemetryData.TryGetValue("Temperature", out var temp) ? Convert.ToDouble(temp) : 0.0;
+        var smokeLevel = incident.TelemetryData.TryGetValue("SmokeLevel", out var smoke) ? Convert.ToDouble(smoke) : 0.0;
+        var batteryLevel = incident.TelemetryData.TryGetValue("BatteryLevel", out var battery) ? Convert.ToDouble(battery) : 0.0;
+        var signalStrength = incident.TelemetryData.TryGetValue("SignalStrength", out var signal) ? Convert.ToDouble(signal) : 0.0;
+
         var auditEvent = new AuditHistoryEvent
         {
             CorrelationId = incident.CorrelationId,
-            EventId = 0, // Will be populated by API consumer
-            DeviceId = int.TryParse(incident.DeviceId, out var deviceId) ? deviceId : 0,
+            EventIdGuid = Guid.NewGuid().ToString(),
+            EventId = 0, // Will be populated after Event creation in API
+            DeviceId = incident.DeviceId,
+            BuildingId = incident.BuildingId,
             EventType = incident.IncidentType,
             Severity = incident.Severity,
             ProcessingResult = "Incident Created",
             ProcessorName = "Action.Dispatcher.IncidentHandler",
             Remarks = $"Incident {incident.IncidentId} processed with confidence {incident.ConfidenceScore:P2} by rule {incident.RuleTriggered}",
             ProcessedUtc = DateTime.UtcNow,
+            EventUtc = incident.DetectedAtUtc,
+            Temperature = temperature,
+            SmokeLevel = smokeLevel,
+            BatteryLevel = batteryLevel,
+            SignalStrength = signalStrength,
             Metadata = new Dictionary<string, object>
             {
                 ["IncidentId"] = incident.IncidentId,

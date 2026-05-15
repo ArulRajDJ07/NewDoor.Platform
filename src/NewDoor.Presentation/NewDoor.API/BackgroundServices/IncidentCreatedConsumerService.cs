@@ -30,7 +30,6 @@ public class IncidentCreatedConsumerService : BackgroundService
         try
         {
             var topic = _configuration["Kafka:IncidentCreatedTopic"] ?? "newdoor.incident.created";
-            _logger.LogInformation("Starting IncidentCreated consumer: {Topic}", topic);
             await _kafkaConsumer.StartConsumingAsync(topic, stoppingToken);
         }
         catch (Exception ex)

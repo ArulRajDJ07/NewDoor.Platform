@@ -35,15 +35,11 @@ public class IncidentCreatedMessageHandler : IKafkaMessageHandler<IncidentCreate
 
         try
         {
-            _logger.LogInformation("Received incident.created event: {IncidentCode}", message.IncidentCode);
-
             // 1. Store in database using CQRS command
             var incidentResponse = await StoreIncidentAsync(mediator, message, cancellationToken);
 
             // 2. Broadcast to UI via SignalR
             await BroadcastIncidentToUIAsync(hubContext, incidentResponse, message, cancellationToken);
-
-            _logger.LogInformation("Incident {IncidentCode} stored and broadcasted", message.IncidentCode);
         }
         catch (Exception ex)
         {
@@ -60,6 +56,7 @@ public class IncidentCreatedMessageHandler : IKafkaMessageHandler<IncidentCreate
         {
             IncidentCode = message.IncidentCode,
             BuildingId = message.BuildingId,
+            DeviceId = message.DeviceId, // Now storing string DeviceId directly from telemetry
             IncidentType = message.IncidentType,
             Severity = message.Severity,
             Status = message.Status,
@@ -73,36 +70,39 @@ public class IncidentCreatedMessageHandler : IKafkaMessageHandler<IncidentCreate
         var command = new AddIncidentCommand(addIncidentRequest);
         var result = await mediator.Send(command, cancellationToken);
 
-        _logger.LogInformation("Incident stored in database: Id={Id}, Code={Code}", result.Id, result.IncidentCode);
-
         return result;
     }
 
     private async Task BroadcastIncidentToUIAsync(IHubContext<NotificationHub> hubContext, IncidentResponse incident, IncidentCreatedEvent message, CancellationToken cancellationToken)
     {
         var floor = message.TelemetryData.TryGetValue("Floor", out var floorValue) 
-            ? floorValue?.ToString() ?? "" 
-            : "";
+            ? floorValue?.ToString() ?? "Unknown" 
+            : "Unknown";
         var zone = message.TelemetryData.TryGetValue("Zone", out var zoneValue) 
-            ? zoneValue?.ToString() ?? "" 
-            : "";
+            ? zoneValue?.ToString() ?? "Unknown" 
+            : "Unknown";
+
+        // Create a meaningful message if Summary is empty
+        var displayMessage = !string.IsNullOrWhiteSpace(incident.Summary) 
+            ? incident.Summary 
+            : $"{incident.IncidentType} detected - {incident.Severity} severity";
 
         var dashboardAlert = new DashboardAlert
         {
             AlertId = incident.IncidentCode,
-            DeviceId = message.DeviceId,
-            DeviceName = message.DeviceName,
-            BuildingCode = message.BuildingCode,
+            DeviceId = message.DeviceId ?? "Unknown",
+            DeviceName = message.DeviceName ?? "Unknown Device",
+            BuildingCode = message.BuildingCode ?? "Unknown",
             Location = $"{floor} / {zone}",
             Severity = incident.Severity,
-            Message = incident.Summary,
+            Message = displayMessage,
             Timestamp = incident.StartedUtc,
             AdditionalData = new Dictionary<string, object>
             {
                 { "IncidentId", incident.Id },
                 { "IncidentType", incident.IncidentType },
                 { "Status", incident.Status },
-                { "RootCause", incident.RootCause },
+                { "RootCause", incident.RootCause ?? "Under investigation" },
                 { "ConfidenceScore", message.ConfidenceScore },
                 { "TelemetryData", message.TelemetryData }
             }
@@ -117,8 +117,6 @@ public class IncidentCreatedMessageHandler : IKafkaMessageHandler<IncidentCreate
             var groupName = $"Building_{incident.BuildingId}";
             await hubContext.Clients.Group(groupName).SendAsync("ReceiveIncident", dashboardAlert, cancellationToken);
         }
-
-        _logger.LogInformation("Incident broadcasted to UI: {IncidentCode}", incident.IncidentCode);
     }
     #endregion
 }

@@ -20,7 +20,7 @@
                    .IsRequired();
 
                builder.Property(x => x.DeviceId)
-                   .IsRequired();
+                   .IsRequired(false);
 
                builder.Property(x => x.EventType)
                    .IsRequired()
@@ -50,7 +50,8 @@
                builder.HasOne(x => x.Device)
                    .WithMany()
                    .HasForeignKey(x => x.DeviceId)
-                   .OnDelete(DeleteBehavior.Restrict);
+                   .OnDelete(DeleteBehavior.Restrict)
+                   .IsRequired(false);
 
                // Indexes
                builder.HasIndex(x => x.EventId);

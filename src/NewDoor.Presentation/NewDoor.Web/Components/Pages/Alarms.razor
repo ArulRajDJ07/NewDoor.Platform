@@ -3,12 +3,19 @@
 @using NewDoor.Web.Services
 @using NewDoor.Platform.DTO.Features.Alarms.Models
 @inject ApiClientService ApiClient
+@inject SignalRService SignalRService
+@implements IAsyncDisposable
 
 <PageTitle>Alarms - Monitoring</PageTitle>
 
 <div class="monitoring-container">
     <div class="page-header">
-        <h2>Alarms Monitoring</h2>
+        <div class="header-left">
+            <h2>Alarms Monitoring</h2>
+            <span class="live-indicator @(SignalRService.IsConnected ? "live" : "offline")">
+                @(SignalRService.IsConnected ? "🔴 LIVE" : "○ OFFLINE")
+            </span>
+        </div>
         <button class="btn-refresh" @onclick="LoadAlarmsAsync">
             <i class="fas fa-sync-alt"></i> Refresh
         </button>
@@ -130,6 +137,7 @@
     private string selectedSeverity = "";
     private string selectedStatus = "";
     private bool isLoading = true;
+    private int newAlarmsCount = 0;
 
     private List<AlarmResponse> filteredAlarms => alarms
         .Where(a => string.IsNullOrEmpty(selectedSeverity) || a.Severity.Equals(selectedSeverity, StringComparison.OrdinalIgnoreCase))
@@ -140,6 +148,55 @@
     protected override async Task OnInitializedAsync()
     {
         await LoadAlarmsAsync();
+
+        // Subscribe to real-time alarm updates
+        SignalRService.OnAlarmReceived += HandleAlarmReceived;
+
+        // Start SignalR if not connected
+        if (!SignalRService.IsConnected)
+        {
+            await SignalRService.StartAsync();
+        }
+    }
+
+    private void HandleAlarmReceived(object? sender, NewDoor.Web.Models.AlarmNotification notification)
+    {
+        // Convert DashboardAlert to AlarmResponse
+        var newAlarm = new AlarmResponse
+        {
+            AlarmCode = notification.Alert.AlertId,
+            DeviceId = notification.Alert.DeviceId, // Now it's a string, no conversion needed
+            BuildingId = notification.Alert.AdditionalData.ContainsKey("BuildingId") 
+                ? Convert.ToInt32(notification.Alert.AdditionalData["BuildingId"]) 
+                : 0,
+            RuleId = notification.Alert.AdditionalData.ContainsKey("RuleId") 
+                ? Convert.ToInt32(notification.Alert.AdditionalData["RuleId"]) 
+                : 0,
+            Severity = notification.Alert.Severity,
+            AlarmMessage = notification.Alert.Message,
+            AlarmStatus = notification.Alert.AdditionalData.ContainsKey("AlarmStatus") 
+                ? notification.Alert.AdditionalData["AlarmStatus"]?.ToString() ?? "Active"
+                : "Active",
+            TriggeredUtc = notification.Alert.Timestamp,
+            TriggeredBy = "System"
+        };
+
+        // Add to list if not already present
+        if (!alarms.Any(a => a.AlarmCode == newAlarm.AlarmCode))
+        {
+            alarms.Insert(0, newAlarm);
+            newAlarmsCount++;
+
+            // Reset count after 5 seconds
+            _ = Task.Run(async () =>
+            {
+                await Task.Delay(5000);
+                newAlarmsCount = Math.Max(0, newAlarmsCount - 1);
+                await InvokeAsync(StateHasChanged);
+            });
+        }
+
+        InvokeAsync(StateHasChanged);
     }
 
     private async Task LoadAlarmsAsync()
@@ -148,7 +205,13 @@
         StateHasChanged();
         alarms = await ApiClient.GetAllAlarmsAsync();
         isLoading = false;
+        newAlarmsCount = 0;
         StateHasChanged();
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        SignalRService.OnAlarmReceived -= HandleAlarmReceived;
     }
 }
 
@@ -166,11 +229,37 @@
         margin-bottom: 20px;
     }
 
+    .header-left {
+        display: flex;
+        align-items: center;
+        gap: 15px;
+    }
+
     .page-header h2 {
         font-size: 24px;
         font-weight: 700;
         color: #333;
         margin: 0;
+    }
+
+    .live-indicator {
+        display: inline-block;
+        padding: 5px 12px;
+        border-radius: 12px;
+        font-size: 11px;
+        font-weight: 700;
+        background: #6b7280;
+        color: white;
+    }
+
+    .live-indicator.live {
+        background: #10b981;
+        animation: pulse 2s infinite;
+    }
+
+    @@keyframes pulse {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.7; }
     }
 
     .btn-refresh {

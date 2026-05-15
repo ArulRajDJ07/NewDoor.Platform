@@ -6,15 +6,6 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
-// Configure SignalR for better WebSocket handling
-builder.Services.AddSignalR(options =>
-{
-    options.EnableDetailedErrors = builder.Environment.IsDevelopment();
-    options.ClientTimeoutInterval = TimeSpan.FromSeconds(60);
-    options.KeepAliveInterval = TimeSpan.FromSeconds(15);
-    options.HandshakeTimeout = TimeSpan.FromSeconds(30);
-});
-
 builder.Services.AddHttpClient();
 
 builder.Services.AddHttpClient<ApiClientService>(client =>
@@ -44,9 +35,6 @@ else
 
 app.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages: true);
 app.UseHttpsRedirection();
-
-// Enable WebSockets for Blazor Server SignalR
-app.UseWebSockets();
 
 app.UseAntiforgery();
 

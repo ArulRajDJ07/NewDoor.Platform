@@ -26,14 +26,9 @@ public class DeviceService
     {
         try
         {
-            _logger.LogInformation("Loading buildings and devices from API...");
-
             Buildings = await _apiClient.GetAllBuildingsWithDevicesAsync();
             Devices = await _apiClient.GetAllDevicesAsync();
             RuntimeStatuses = await _apiClient.GetAllDeviceRuntimeStatusAsync();
-
-            _logger.LogInformation("Loaded {BuildingCount} buildings and {DeviceCount} devices", 
-                Buildings.Count, Devices.Count);
 
             OnDataLoaded?.Invoke();
         }

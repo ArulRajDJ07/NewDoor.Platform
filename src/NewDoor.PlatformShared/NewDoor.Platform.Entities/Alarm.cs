@@ -14,8 +14,8 @@
             [MaxLength(100)]
             public string AlarmCode { get; set; } = string.Empty;
 
-            [Required]
-            public int DeviceId { get; set; }
+            [MaxLength(100)]
+            public string DeviceId { get; set; } = string.Empty;
 
             [Required]
             public int BuildingId { get; set; }
@@ -47,7 +47,6 @@
             public string ResolutionNotes { get; set; } = string.Empty;
 
             // Navigation properties
-            public virtual Device Device { get; set; } = null!;
             public virtual Building Building { get; set; } = null!;
             public virtual Rule Rule { get; set; } = null!;
             public virtual Incident? Incident { get; set; }

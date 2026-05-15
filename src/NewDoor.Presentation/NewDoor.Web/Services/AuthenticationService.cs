@@ -31,7 +31,6 @@ public class AuthenticationService
             // For now, accept any non-empty phone number
             _isAuthenticated = true;
             _phoneNumber = phoneNumber;
-            _logger.LogInformation("User logged in with phone number: {PhoneNumber}", phoneNumber);
 
             OnAuthenticationStateChanged?.Invoke();
             return true;
@@ -47,7 +46,6 @@ public class AuthenticationService
     {
         _isAuthenticated = false;
         _phoneNumber = null;
-        _logger.LogInformation("User logged out");
         OnAuthenticationStateChanged?.Invoke();
     }
 }

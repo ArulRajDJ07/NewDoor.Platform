@@ -30,7 +30,6 @@ public class AlarmCreatedConsumerService : BackgroundService
         try
         {
             var topic = _configuration["Kafka:AlarmCreatedTopic"] ?? "newdoor.alarm.created";
-            _logger.LogInformation("Starting AlarmCreated consumer: {Topic}", topic);
             await _kafkaConsumer.StartConsumingAsync(topic, stoppingToken);
         }
         catch (Exception ex)

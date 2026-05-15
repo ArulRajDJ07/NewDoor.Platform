@@ -60,7 +60,7 @@ public class AlarmMessageHandler : IKafkaMessageHandler<AlarmEvent>
         {
             AlarmCode = alarm.AlarmId,
             CorrelationId = alarm.CorrelationId,
-            DeviceId = int.TryParse(alarm.DeviceId, out var deviceId) ? deviceId : 0,
+            DeviceId = alarm.DeviceId,
             BuildingId = alarm.BuildingId,
             BuildingCode = alarm.BuildingCode,
             RuleId = alarm.RuleId,
@@ -84,17 +84,30 @@ public class AlarmMessageHandler : IKafkaMessageHandler<AlarmEvent>
 
     private async Task PublishAuditHistoryAsync(AlarmEvent alarm, CancellationToken cancellationToken)
     {
+        // Extract telemetry data from Context
+        var temperature = alarm.Context.TryGetValue("Temperature", out var temp) ? Convert.ToDouble(temp) : 0.0;
+        var smokeLevel = alarm.Context.TryGetValue("SmokeLevel", out var smoke) ? Convert.ToDouble(smoke) : 0.0;
+        var batteryLevel = 0.0; // Not available in alarm context
+        var signalStrength = 0.0; // Not available in alarm context
+
         var auditEvent = new AuditHistoryEvent
         {
             CorrelationId = alarm.CorrelationId,
-            EventId = 0, // Will be populated by API consumer
-            DeviceId = int.TryParse(alarm.DeviceId, out var deviceId) ? deviceId : 0,
+            EventIdGuid = Guid.NewGuid().ToString(), // Generate new GUID for Event.EventId
+            EventId = 0, // Will be populated after Event creation in API
+            DeviceId = alarm.DeviceId,
+            BuildingId = alarm.BuildingId,
             EventType = alarm.AlarmType,
             Severity = alarm.Severity,
             ProcessingResult = "Alarm Triggered",
             ProcessorName = "Action.Dispatcher.AlarmHandler",
             Remarks = $"Alarm {alarm.AlarmId} triggered at {alarm.BuildingCode}/{alarm.Floor}/{alarm.Zone} - {alarm.Message}",
             ProcessedUtc = DateTime.UtcNow,
+            EventUtc = alarm.TriggeredAtUtc,
+            Temperature = temperature,
+            SmokeLevel = smokeLevel,
+            BatteryLevel = batteryLevel,
+            SignalStrength = signalStrength,
             Metadata = new Dictionary<string, object>
             {
                 ["AlarmId"] = alarm.AlarmId,

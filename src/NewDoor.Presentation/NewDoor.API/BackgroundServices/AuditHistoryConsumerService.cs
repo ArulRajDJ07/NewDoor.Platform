@@ -30,7 +30,6 @@ public class AuditHistoryConsumerService : BackgroundService
         try
         {
             var topic = _configuration["Kafka:AuditHistoryTopic"] ?? "newdoor.audit.history";
-            _logger.LogInformation("Starting AuditHistory consumer: {Topic}", topic);
             await _kafkaConsumer.StartConsumingAsync(topic, stoppingToken);
         }
         catch (Exception ex)

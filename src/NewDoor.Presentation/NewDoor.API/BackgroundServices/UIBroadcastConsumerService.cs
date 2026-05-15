@@ -30,7 +30,6 @@ public class UIBroadcastConsumerService : BackgroundService
         try
         {
             var topic = _configuration["Kafka:UIBroadcastTopic"] ?? "newdoor.ui.broadcast";
-            _logger.LogInformation("Starting UIBroadcast consumer: {Topic}", topic);
             await _kafkaConsumer.StartConsumingAsync(topic, stoppingToken);
         }
         catch (Exception ex)

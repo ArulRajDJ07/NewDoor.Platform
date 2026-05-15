@@ -10,6 +10,9 @@
             [Required]
             public int BuildingId { get; set; }
 
+            [MaxLength(100)]
+            public string DeviceId { get; set; } = string.Empty;
+
             [Required]
             [MaxLength(50)]
             public string IncidentType { get; set; } = string.Empty;

@@ -14,13 +14,11 @@ public class NotificationHub : Hub
 
     public override async Task OnConnectedAsync()
     {
-        _logger.LogInformation("Client connected: ConnectionId={ConnectionId}", Context.ConnectionId);
         await base.OnConnectedAsync();
     }
 
     public override async Task OnDisconnectedAsync(Exception? exception)
     {
-        _logger.LogInformation("Client disconnected: ConnectionId={ConnectionId}", Context.ConnectionId);
         await base.OnDisconnectedAsync(exception);
     }
 
@@ -28,29 +26,22 @@ public class NotificationHub : Hub
     {
         var groupName = $"Building_{buildingId}";
         await Groups.AddToGroupAsync(Context.ConnectionId, groupName);
-        _logger.LogInformation("Client subscribed to building: ConnectionId={ConnectionId}, BuildingId={BuildingId}", 
-            Context.ConnectionId, buildingId);
     }
 
     public async Task UnsubscribeFromBuilding(int buildingId)
     {
         var groupName = $"Building_{buildingId}";
         await Groups.RemoveFromGroupAsync(Context.ConnectionId, groupName);
-        _logger.LogInformation("Client unsubscribed from building: ConnectionId={ConnectionId}, BuildingId={BuildingId}", 
-            Context.ConnectionId, buildingId);
     }
 
     public async Task SendAlertToAll(DashboardAlert alert)
     {
         await Clients.All.SendAsync("ReceiveAlert", alert);
-        _logger.LogInformation("Alert broadcast to all clients: AlertId={AlertId}", alert.AlertId);
     }
 
     public async Task SendAlertToBuilding(int buildingId, DashboardAlert alert)
     {
         var groupName = $"Building_{buildingId}";
         await Clients.Group(groupName).SendAsync("ReceiveAlert", alert);
-        _logger.LogInformation("Alert broadcast to building: BuildingId={BuildingId}, AlertId={AlertId}", 
-            buildingId, alert.AlertId);
     }
 }

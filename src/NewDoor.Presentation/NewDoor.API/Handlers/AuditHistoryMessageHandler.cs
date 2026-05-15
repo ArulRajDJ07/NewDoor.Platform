@@ -4,7 +4,11 @@ using MediatR;
 using NewDoor.API.Hubs;
 using NewDoor.API.Models;
 using NewDoor.API.Features.EventsHistorys.Command;
+using NewDoor.API.Features.Devices.Query;
+using NewDoor.API.Features.Events.Command;
 using NewDoor.Platform.DTO.Features.EventsHistorys.Models;
+using NewDoor.Platform.DTO.Features.Devices.Models;
+using NewDoor.Platform.DTO.Features.Events.Models;
 
 namespace NewDoor.API.Handlers;
 
@@ -35,31 +39,57 @@ public class AuditHistoryMessageHandler : IKafkaMessageHandler<AuditHistoryEvent
 
         try
         {
-            _logger.LogInformation("Received audit.history event for EventId: {EventId}", message.EventId);
+            // 1. Create Event record first
+            var eventResponse = await StoreEventAsync(mediator, message, cancellationToken);
 
-            // 1. Store in database using CQRS command
-            var eventsHistoryResponse = await StoreEventsHistoryAsync(mediator, message, cancellationToken);
+            // 2. Create EventsHistory with the Event.Id
+            var eventsHistoryResponse = await StoreEventsHistoryAsync(mediator, message, eventResponse.Id, cancellationToken);
 
-            // 2. Broadcast to UI via SignalR (optional for audit trail visibility)
+            // 3. Broadcast to UI via SignalR
             await BroadcastAuditToUIAsync(hubContext, eventsHistoryResponse, message, cancellationToken);
-
-            _logger.LogInformation("EventsHistory stored and broadcasted: Id={Id}", eventsHistoryResponse.Id);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error handling audit.history for EventId: {EventId}", message.EventId);
+            _logger.LogError(ex, "Error handling audit.history for CorrelationId: {CorrelationId}", message.CorrelationId);
             throw;
         }
     }
     #endregion
 
     #region Private Methods
-    private async Task<EventsHistoryResponse> StoreEventsHistoryAsync(IMediator mediator, AuditHistoryEvent message, CancellationToken cancellationToken)
+    private async Task<EventResponse> StoreEventAsync(IMediator mediator, AuditHistoryEvent message, CancellationToken cancellationToken)
     {
+        var addEventRequest = new AddEventRequest
+        {
+            EventId = message.EventIdGuid, // Use the GUID from audit event
+            DeviceId = message.DeviceId, // Now storing string DeviceId directly from telemetry
+            BuildingId = message.BuildingId,
+            EventType = message.EventType,
+            Temperature = message.Temperature,
+            SmokeLevel = message.SmokeLevel,
+            BatteryLevel = message.BatteryLevel,
+            SignalStrength = message.SignalStrength,
+            Payload = System.Text.Json.JsonSerializer.Serialize(message.Metadata),
+            Severity = message.Severity,
+            EventUtc = message.EventUtc,
+            CorrelationId = message.CorrelationId
+        };
+
+        var command = new AddEventCommand(addEventRequest);
+        var result = await mediator.Send(command, cancellationToken);
+
+        return result;
+    }
+
+    private async Task<EventsHistoryResponse> StoreEventsHistoryAsync(IMediator mediator, AuditHistoryEvent message, int eventId, CancellationToken cancellationToken)
+    {
+        // Lookup Device by DeviceId string to get integer PK
+        var devicePkId = await GetDeviceIdByDeviceIdentifierAsync(mediator, message.DeviceId, cancellationToken);
+
         var addEventsHistoryRequest = new AddEventsHistoryRequest
         {
-            EventId = message.EventId,
-            DeviceId = message.DeviceId,
+            EventId = eventId, // Use the Event.Id we just created
+            DeviceId = devicePkId,
             EventType = message.EventType,
             Severity = message.Severity,
             ProcessingResult = message.ProcessingResult,
@@ -71,10 +101,26 @@ public class AuditHistoryMessageHandler : IKafkaMessageHandler<AuditHistoryEvent
         var command = new AddEventsHistoryCommand(addEventsHistoryRequest);
         var result = await mediator.Send(command, cancellationToken);
 
-        _logger.LogInformation("EventsHistory stored in database: Id={Id}, EventId={EventId}", 
-            result.Id, result.EventId);
-
         return result;
+    }
+
+    private async Task<int> GetDeviceIdByDeviceIdentifierAsync(IMediator mediator, string deviceId, CancellationToken cancellationToken)
+    {
+        var filter = new DeviceFilterRequest
+        {
+            DeviceId = deviceId
+        };
+
+        var query = new FindAllDeviceQuery(filter);
+        var devices = await mediator.Send(query, cancellationToken);
+
+        if (devices == null || devices.Count == 0)
+        {
+            _logger.LogWarning("Device not found with DeviceId: {DeviceId}", deviceId);
+            throw new InvalidOperationException($"Device not found with DeviceId: {deviceId}");
+        }
+
+        return devices.First().Id;
     }
 
     private async Task BroadcastAuditToUIAsync(IHubContext<NotificationHub> hubContext, EventsHistoryResponse eventsHistory, AuditHistoryEvent message, CancellationToken cancellationToken)
@@ -95,8 +141,6 @@ public class AuditHistoryMessageHandler : IKafkaMessageHandler<AuditHistoryEvent
 
         // Broadcast audit trail to all admin/monitoring clients
         await hubContext.Clients.All.SendAsync("ReceiveAuditHistory", auditData, cancellationToken);
-
-        _logger.LogInformation("Audit history broadcasted to UI: Id={Id}", eventsHistory.Id);
     }
     #endregion
 }
