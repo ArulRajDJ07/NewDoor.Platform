@@ -7,6 +7,8 @@
 
             public string DeviceId { get; set; }
 
+            public string DeviceCode { get; set; } = string.Empty;
+
             public string DeviceName { get; set; }
 
             public string DeviceType { get; set; }

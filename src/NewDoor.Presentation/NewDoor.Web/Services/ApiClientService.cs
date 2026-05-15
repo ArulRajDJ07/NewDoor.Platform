@@ -7,6 +7,7 @@ using NewDoor.Platform.DTO.Features.Alarms.Models;
 using NewDoor.Platform.DTO.Features.Incidents.Models;
 using NewDoor.Platform.DTO.Features.EventsHistorys.Models;
 using NewDoor.Platform.DTO.Features.Events.Models;
+using NewDoor.Platform.DTO.Features.Rules.Models;
 
 namespace NewDoor.Web.Services;
 
@@ -131,6 +132,20 @@ public class ApiClientService
         {
             _logger.LogError(ex, "Failed to load events");
             return new List<EventResponse>();
+        }
+    }
+
+    public async Task<List<RuleResponse>> GetAllRulesAsync()
+    {
+        try
+        {
+            var response = await _httpClient.GetFromJsonAsync<List<RuleResponse>>("/api/rule/getall");
+            return response ?? new List<RuleResponse>();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to load rules");
+            return new List<RuleResponse>();
         }
     }
 }

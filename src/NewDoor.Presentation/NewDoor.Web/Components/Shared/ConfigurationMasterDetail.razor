@@ -1,0 +1,34 @@
+@typeparam TItem
+
+<div class="config-container">
+    <div class="page-header">
+        <h2>@Title</h2>
+        <button class="btn-refresh" @onclick="OnRefresh">
+            Refresh
+        </button>
+    </div>
+
+    <div class="two-column-layout">
+        <div class="left-column">
+            @ListContent
+        </div>
+
+        <div class="right-column">
+            @DetailContent
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter]
+    public string Title { get; set; } = string.Empty;
+
+    [Parameter]
+    public RenderFragment ListContent { get; set; } = null!;
+
+    [Parameter]
+    public RenderFragment DetailContent { get; set; } = null!;
+
+    [Parameter]
+    public EventCallback OnRefresh { get; set; }
+}
