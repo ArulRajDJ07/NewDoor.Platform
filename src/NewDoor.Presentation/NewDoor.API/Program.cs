@@ -56,7 +56,12 @@ namespace NewDoor.API
                         });
                 });
 
-                builder.Services.AddSignalR();
+                builder.Services.AddSignalR()
+                    .AddJsonProtocol(options =>
+                    {
+                        options.PayloadSerializerOptions.PropertyNamingPolicy = null; // Use original property names
+                        options.PayloadSerializerOptions.PropertyNameCaseInsensitive = true;
+                    });
 
                 // Register all Kafka consumers using keyed service pattern
                 builder.Services.AddKafkaConsumers(builder.Configuration);

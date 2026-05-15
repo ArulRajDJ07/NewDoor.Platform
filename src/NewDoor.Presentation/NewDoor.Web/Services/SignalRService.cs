@@ -55,6 +55,11 @@ public class SignalRService : IAsyncDisposable
                     options.SkipNegotiation = false;
                 })
                 .WithAutomaticReconnect(new[] { TimeSpan.Zero, TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(10) })
+                .AddJsonProtocol(options =>
+                {
+                    options.PayloadSerializerOptions.PropertyNamingPolicy = null; // Use original property names
+                    options.PayloadSerializerOptions.PropertyNameCaseInsensitive = true;
+                })
                 .Build();
 
             // Register event handlers
@@ -72,6 +77,8 @@ public class SignalRService : IAsyncDisposable
             _isStarted = true;
             _reconnectAttempts = 0;
             UpdateConnectionState(ConnectionState.Connected, "Connected to notification hub");
+
+            _logger.LogInformation("SignalR connected successfully to {HubUrl}", hubUrl);
         }
         catch (Exception ex)
         {
@@ -144,13 +151,41 @@ public class SignalRService : IAsyncDisposable
     {
         if (_hubConnection == null) return;
 
-        // Handle incident notifications
-        _hubConnection.On<object>("ReceiveIncident", (data) =>
+        // Handle generic alert notifications (primary handler)
+        _hubConnection.On<DashboardAlert>("ReceiveAlert", (alert) =>
         {
             try
             {
-                var json = JsonSerializer.Serialize(data);
-                var alert = JsonSerializer.Deserialize<DashboardAlert>(json);
+                _logger.LogInformation("ReceiveAlert event triggered - DeviceId: {DeviceId}, Message: {Message}", alert?.DeviceId, alert?.Message);
+
+                if (alert != null)
+                {
+                    _logger.LogInformation("Alert received: {DeviceId} - {Message}", alert.DeviceId, alert.Message);
+
+                    // Route to alarm handler
+                    var notification = new AlarmNotification
+                    {
+                        Alert = alert,
+                        ReceivedAt = DateTime.UtcNow,
+                        IsNew = true
+                    };
+
+                    OnAlarmReceived?.Invoke(this, notification);
+                    _logger.LogInformation("OnAlarmReceived event invoked");
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error processing alert notification");
+            }
+        });
+
+        // Handle incident notifications
+        _hubConnection.On<DashboardAlert>("ReceiveIncident", (alert) =>
+        {
+            try
+            {
+                _logger.LogInformation("ReceiveIncident event triggered - DeviceId: {DeviceId}, Message: {Message}", alert?.DeviceId, alert?.Message);
 
                 if (alert != null)
                 {
@@ -158,10 +193,11 @@ public class SignalRService : IAsyncDisposable
                     {
                         Alert = alert,
                         ReceivedAt = DateTime.UtcNow,
-                            IsNew = true
-                        };
+                        IsNew = true
+                    };
 
-                        OnIncidentReceived?.Invoke(this, notification);
+                    OnIncidentReceived?.Invoke(this, notification);
+                    _logger.LogInformation("OnIncidentReceived event invoked successfully");
                 }
             }
             catch (Exception ex)
@@ -171,12 +207,11 @@ public class SignalRService : IAsyncDisposable
         });
 
         // Handle alarm notifications
-        _hubConnection.On<object>("ReceiveAlarm", (data) =>
+        _hubConnection.On<DashboardAlert>("ReceiveAlarm", (alert) =>
         {
             try
             {
-                var json = JsonSerializer.Serialize(data);
-                var alert = JsonSerializer.Deserialize<DashboardAlert>(json);
+                _logger.LogInformation("ReceiveAlarm event triggered - DeviceId: {DeviceId}, Message: {Message}", alert?.DeviceId, alert?.Message);
 
                 if (alert != null)
                 {
@@ -184,10 +219,11 @@ public class SignalRService : IAsyncDisposable
                     {
                         Alert = alert,
                         ReceivedAt = DateTime.UtcNow,
-                            IsNew = true
-                        };
+                        IsNew = true
+                    };
 
-                        OnAlarmReceived?.Invoke(this, notification);
+                    OnAlarmReceived?.Invoke(this, notification);
+                    _logger.LogInformation("OnAlarmReceived event invoked successfully");
                 }
             }
             catch (Exception ex)
@@ -197,12 +233,11 @@ public class SignalRService : IAsyncDisposable
         });
 
         // Handle audit history notifications
-        _hubConnection.On<object>("ReceiveAuditHistory", (data) =>
+        _hubConnection.On<AuditHistoryNotification>("ReceiveAuditHistory", (audit) =>
         {
             try
             {
-                var json = JsonSerializer.Serialize(data);
-                var audit = JsonSerializer.Deserialize<AuditHistoryNotification>(json);
+                _logger.LogInformation("ReceiveAuditHistory event triggered - AuditId: {AuditId}", audit?.AuditId);
 
                 if (audit != null)
                 {
@@ -210,6 +245,7 @@ public class SignalRService : IAsyncDisposable
                     audit.IsNew = true;
 
                     OnAuditHistoryReceived?.Invoke(this, audit);
+                    _logger.LogInformation("OnAuditHistoryReceived event invoked successfully");
                 }
             }
             catch (Exception ex)

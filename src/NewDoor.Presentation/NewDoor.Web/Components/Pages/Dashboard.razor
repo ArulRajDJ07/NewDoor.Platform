@@ -8,6 +8,7 @@
 @inject EventBufferService EventBuffer
 @inject SignalRService SignalRService
 @inject ApiClientService ApiClient
+@inject IConfiguration _configuration
 @implements IAsyncDisposable
 
 <PageTitle>Dashboard - Live Monitoring</PageTitle>
@@ -157,10 +158,7 @@
                     {
                         await DeviceService.LoadDataAsync();
 
-                        // Load initial alarms and incidents from database
-                        await LoadInitialDataAsync();
-
-                        // Subscribe to SignalR events
+                        // Subscribe to SignalR events FIRST
                         SignalRService.OnIncidentReceived += HandleIncidentReceived;
                         SignalRService.OnAlarmReceived += HandleAlarmReceived;
                         SignalRService.OnConnectionStateChanged += HandleConnectionStateChanged;
@@ -170,6 +168,14 @@
                         {
                             await SignalRService.StartAsync();
                         }
+
+                        // Update connection state immediately
+                        connectionState = SignalRService.CurrentState;
+
+                        // Load initial alarms and incidents from database
+                        await LoadInitialDataAsync();
+
+                        StateHasChanged();
                     }
 
                     private async Task LoadInitialDataAsync()
@@ -295,6 +301,7 @@
 
     private void HandleConnectionStateChanged(object? sender, ConnectionStateChangedEventArgs e)
     {
+        Console.WriteLine($"🔌 Connection state changed: {e.State} - {e.Message}");
         connectionState = e.State;
         InvokeAsync(StateHasChanged);
     }
@@ -397,11 +404,41 @@
         if (alert.AdditionalData.TryGetValue("RuleName", out var ruleObj))
         {
             return ruleObj?.ToString() ?? "N/A";
+            }
+            return "N/A";
         }
-        return "N/A";
-    }
 
-    public async ValueTask DisposeAsync()
+        private async Task TriggerTestAlarm()
+        {
+            try
+            {
+                var apiBaseUrl = _configuration["Api:BaseUrl"] ?? "https://localhost:7192";
+                var client = new HttpClient();
+                var response = await client.PostAsync($"{apiBaseUrl}/api/TestNotification/send-test-alarm", null);
+
+                if (response.IsSuccessStatusCode)
+                {
+                    Console.WriteLine("Test alarm triggered successfully");
+                }
+                else
+                {
+                    Console.WriteLine($"Failed to trigger test alarm: {response.StatusCode}");
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error triggering test alarm: {ex.Message}");
+            }
+        }
+
+        private void ClearAlarms()
+        {
+            liveAlarms.Clear();
+            liveIncidents.Clear();
+            StateHasChanged();
+        }
+
+        public async ValueTask DisposeAsync()
     {
         SignalRService.OnIncidentReceived -= HandleIncidentReceived;
         SignalRService.OnAlarmReceived -= HandleAlarmReceived;
