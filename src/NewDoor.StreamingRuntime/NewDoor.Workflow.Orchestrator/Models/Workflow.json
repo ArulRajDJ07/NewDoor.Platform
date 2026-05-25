@@ -1,0 +1,336 @@
+{
+  "SchemaVersion": "1.0",
+  "VirtualService": {
+    "Id": "vs-workflow-orchestrator",
+    "Name": "NewDoor.Workflow.Orchestrator",
+    "Type": "WorkflowOrchestrator",
+    "Environment": "prod",
+    "Description": "Virtual service hosting the NewDoor Workflow Orchestrator job profile(s). Sits between the Listener and the Processor.Runtime / Action.Dispatcher stages of the Kafka pipeline: consumes enriched workflow events, routes them to the runtime processor, then consumes processor results and dispatches downstream actions.",
+    "CreatedAt": "2026-05-25T09:00:00Z",
+    "JobProfiles": [
+      {
+        "Id": "jp-workflow-orchestrator",
+        "Code": "WORKFLOW_ORCHESTRATOR",
+        "Name": "Workflow Orchestrator Job Profile",
+        "Description": "Two-stage Kafka workflow: (1) workflow.events -> runtime.processing, (2) runtime.result -> action.execution (with alarm / audit branching).",
+        "DefaultWorkflowIds": [
+          "wf-event-router",
+          "wf-result-coordinator"
+        ],
+        "Workflows": [
+
+          {
+            "Id": "wf-event-router",
+            "Name": "EnrichedEventRouterWorkflow",
+            "HandlerClass": "src/NewDoor.Workflow.Orchestrator/Handlers/EventMessageHandler",
+            "Description": "Stage 4 of the Kafka pipeline. Consumes EnrichedWorkflowEvent from the Listener on 'newdoor.workflow.events', maps to RuntimeTelemetryEvent and dispatches a ProcessorRequest to 'newdoor.runtime.processing' for the Processor.Runtime to consume.",
+            "ExecutionMode": "Sequential",
+            "OnSuccess": {
+              "Type": "Workflow",
+              "Id": "wf-result-coordinator"
+            },
+            "OnError": {
+              "Type": "Workflow",
+              "Id": null
+            },
+            "Triggers": [
+              {
+                "Id": "t-workflow-events",
+                "Type": "KafkaTopic",
+                "TopicName": "newdoor.workflow.events",
+                "ConsumerGroup": "workflow-orchestrator-event-group",
+                "ConsumerAdapter": "src/NewDoor.Workflow.Orchestrator/BackgroundServices/EventConsumerService",
+                "UpstreamProducer": "NewDoor.Listener",
+                "CreatedAt": "2026-05-25T09:00:00Z"
+              }
+            ],
+            "Steps": [
+              {
+                "Id": "step-e-1",
+                "Name": "MapEnrichedEventToTelemetry",
+                "TaskType": "transformation",
+                "SequenceIndex": 1,
+                "OnSuccess": {
+                  "Type": "Step",
+                  "Id": "step-e-2"
+                },
+                "OnError": {
+                  "Type": "Step",
+                  "Id": "step-support-route"
+                },
+                "Actions": [
+                  {
+                    "Id": "e-a-01",
+                    "Name": "MapToRuntimeTelemetryEvent",
+                    "ActionType": "InternalModule",
+                    "ModuleName": "EventMessageHandler",
+                    "ModuleMethod": "MapEnrichedToRuntime",
+                    "Parameters": {
+                      "SourceType": "EnrichedWorkflowEvent",
+                      "TargetType": "RuntimeTelemetryEvent"
+                    }
+                  }
+                ]
+              },
+              {
+                "Id": "step-e-2",
+                "Name": "RouteToProcessorRuntime",
+                "TaskType": "processing",
+                "SequenceIndex": 2,
+                "OnSuccess": {
+                  "Type": "Workflow",
+                  "Id": "wf-result-coordinator"
+                },
+                "OnError": {
+                  "Type": "Step",
+                  "Id": "step-support-route"
+                },
+                "Actions": [
+                  {
+                    "Id": "e-a-02",
+                    "Name": "PublishProcessorRequest",
+                    "ActionType": "ExternalSystem",
+                    "ModuleName": "KafkaProducer",
+                    "ModuleMethod": "PublishAsync",
+                    "Parameters": {
+                      "Topic": "newdoor.runtime.processing",
+                      "KeySource": "RuntimeTelemetryEvent.DeviceId",
+                      "PayloadType": "ProcessorRequest",
+                      "DownstreamConsumer": "NewDoor.Processor.Runtime"
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+
+          {
+            "Id": "wf-result-coordinator",
+            "Name": "ProcessingResultCoordinatorWorkflow",
+            "HandlerClass": "src/NewDoor.Workflow.Orchestrator/Handlers/ProcessingResultMessageHandler",
+            "Description": "Stage 6 of the Kafka pipeline. Consumes ProcessorResponse from 'newdoor.runtime.result', decides the final workflow state, then publishes an ActionExecutionRequest to 'newdoor.action.execution' for the Action.Dispatcher. Critical results are mirrored to 'newdoor.alarm.triggered'; non-critical results to 'newdoor.audit.history'. Incident outcomes are also published to 'newdoor.incident.detected'.",
+            "ExecutionMode": "Sequential",
+            "OnSuccess": {
+              "Type": "Workflow",
+              "Id": null
+            },
+            "OnError": {
+              "Type": "Workflow",
+              "Id": null
+            },
+            "Triggers": [
+              {
+                "Id": "t-runtime-result",
+                "Type": "KafkaTopic",
+                "TopicName": "newdoor.runtime.result",
+                "ConsumerGroup": "workflow-orchestrator-result-group",
+                "ConsumerAdapter": "src/NewDoor.Workflow.Orchestrator/BackgroundServices/ProcessingResultConsumerService",
+                "UpstreamProducer": "NewDoor.Processor.Runtime",
+                "CreatedAt": "2026-05-25T09:00:00Z"
+              }
+            ],
+            "Steps": [
+              {
+                "Id": "step-r-1",
+                "Name": "EvaluateProcessorResponse",
+                "TaskType": "validation",
+                "SequenceIndex": 1,
+                "OnSuccess": {
+                  "Type": "Step",
+                  "Id": "step-r-2"
+                },
+                "OnError": {
+                  "Type": "Step",
+                  "Id": "step-support-route"
+                },
+                "Actions": [
+                  {
+                    "Id": "r-a-01",
+                    "Name": "InspectProcessorFlags",
+                    "ActionType": "InternalModule",
+                    "ModuleName": "WorkflowCoordinator",
+                    "ModuleMethod": "DetermineActionType",
+                    "Parameters": {
+                      "Inputs": [
+                        "ProcessorResponse.IsIncident",
+                        "ProcessorResponse.IsAlarm",
+                        "ProcessorResponse.Severity"
+                      ]
+                    }
+                  }
+                ]
+              },
+
+              {
+                "Id": "step-r-2",
+                "Name": "BranchBySeverity",
+                "TaskType": "decision",
+                "SequenceIndex": 2,
+                "OnSuccess": {
+                  "Type": "Step",
+                  "Id": "step-r-3"
+                },
+                "OnError": {
+                  "Type": "Step",
+                  "Id": "step-support-route"
+                },
+                "Actions": [
+                  {
+                    "Id": "r-a-02",
+                    "Name": "PublishIncidentDetected",
+                    "ActionType": "ExternalSystem",
+                    "ModuleName": "KafkaProducer",
+                    "ModuleMethod": "PublishAsync",
+                    "Parameters": {
+                      "Topic": "newdoor.incident.detected",
+                      "KeySource": "IncidentEvent.DeviceId",
+                      "PayloadType": "IncidentEvent",
+                      "Condition": "ProcessorResponse.IsIncident"
+                    }
+                  },
+                  {
+                    "Id": "r-a-03",
+                    "Name": "PublishCriticalAlarm",
+                    "ActionType": "ExternalSystem",
+                    "ModuleName": "KafkaProducer",
+                    "ModuleMethod": "PublishAsync",
+                    "Parameters": {
+                      "Topic": "newdoor.alarm.triggered",
+                      "KeySource": "AlarmEvent.DeviceId",
+                      "PayloadType": "AlarmEvent",
+                      "Condition": "ProcessorResponse.IsAlarm && ProcessorResponse.Severity == 'Critical'"
+                    }
+                  },
+                  {
+                    "Id": "r-a-04",
+                    "Name": "PublishAuditHistory",
+                    "ActionType": "ExternalSystem",
+                    "ModuleName": "KafkaProducer",
+                    "ModuleMethod": "PublishAsync",
+                    "Parameters": {
+                      "Topic": "newdoor.audit.history",
+                      "KeySource": "AuditHistoryEvent.DeviceId",
+                      "PayloadType": "AuditHistoryEvent",
+                      "Condition": "!ProcessorResponse.IsAlarm || ProcessorResponse.Severity != 'Critical'"
+                    }
+                  }
+                ]
+              },
+
+              {
+                "Id": "step-r-3",
+                "Name": "DispatchActionExecution",
+                "TaskType": "processing",
+                "SequenceIndex": 3,
+                "OnSuccess": {
+                  "Type": "Step",
+                  "Id": "step-r-4"
+                },
+                "OnError": {
+                  "Type": "Step",
+                  "Id": "step-support-route"
+                },
+                "Actions": [
+                  {
+                    "Id": "r-a-05",
+                    "Name": "PublishActionExecutionRequest",
+                    "ActionType": "ExternalSystem",
+                    "ModuleName": "KafkaProducer",
+                    "ModuleMethod": "PublishAsync",
+                    "Parameters": {
+                      "Topic": "newdoor.action.execution",
+                      "KeySource": "ActionDispatchRequest.DeviceId",
+                      "PayloadType": "ActionDispatchRequest",
+                      "DownstreamConsumer": "NewDoor.Action.Dispatcher"
+                    }
+                  }
+                ]
+              },
+
+              {
+                "Id": "step-r-4",
+                "Name": "FinalizeWorkflowState",
+                "TaskType": "tracking",
+                "SequenceIndex": 4,
+                "OnSuccess": {
+                  "Type": "Step",
+                  "Id": null
+                },
+                "OnError": {
+                  "Type": "Step",
+                  "Id": "step-support-route"
+                },
+                "Actions": [
+                  {
+                    "Id": "r-a-06",
+                    "Name": "MarkWorkflowCompleted",
+                    "ActionType": "InternalModule",
+                    "ModuleName": "WorkflowCoordinator",
+                    "ModuleMethod": "FinalizeExecutionResult",
+                    "Parameters": {
+                      "Status": "Completed"
+                    }
+                  },
+                  {
+                    "Id": "r-a-07",
+                    "Name": "PublishRuntimeResultCompleted",
+                    "ActionType": "ExternalSystem",
+                    "ModuleName": "KafkaProducer",
+                    "ModuleMethod": "PublishAsync",
+                    "Parameters": {
+                      "Topic": "newdoor.runtime.result.completed",
+                      "KeySource": "RuntimeResultEvent.DeviceId",
+                      "PayloadType": "RuntimeResultEvent"
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+
+  "CommonSteps": [
+    {
+      "Id": "step-support-route",
+      "Name": "SupportRoute",
+      "TaskType": "support",
+      "SequenceIndex": 999,
+      "OnSuccess": {
+        "Type": "Step",
+        "Id": null
+      },
+      "OnError": {
+        "Type": "Step",
+        "Id": null
+      },
+      "Actions": [
+        {
+          "Id": "s-a-01",
+          "Name": "LogAndNotifySupport",
+          "ActionType": "Support",
+          "ModuleName": "SupportNotifier",
+          "ModuleMethod": "Notify",
+          "Parameters": {
+            "Channel": "Serilog",
+            "Severity": "Critical"
+          }
+        },
+        {
+          "Id": "s-a-02",
+          "Name": "PublishFailedWorkflowResult",
+          "ActionType": "ExternalSystem",
+          "ModuleName": "KafkaProducer",
+          "ModuleMethod": "PublishAsync",
+          "Parameters": {
+            "Topic": "newdoor.runtime.result.failed",
+            "PayloadType": "WorkflowExecutionResult",
+            "Status": "Failed"
+          }
+        }
+      ]
+    }
+  ]
+}
